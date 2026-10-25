@@ -11,14 +11,65 @@ project(UnofficialSMR VERSION 0.0.1 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# --- src/core: DSP only. Plain C++, no JUCE. ---
-add_library(smr_core STATIC src/core/PassThrough.cpp)
+# --- src/core: DSP only. Plain C++, no JUCE, no hardware code. ---
+# -ffp-contract=off: no fused multiply-add (Clang on arm64 and GCC would otherwise fuse). -O2: no -Ofast, no fast-math.
+# (docs/architecture.md section 13.3). PassThrough is the Milestone 0 stand-in that the plugin still uses.
+add_library(smr_core STATIC
+  src/core/PassThrough.cpp
+  src/core/Scheduler.cpp
+  src/core/Lpf.cpp
+  src/core/Tables.cpp
+  src/core/Engine.cpp
+  src/core/Filter.cpp
+  src/core/Params.cpp
+  src/core/Rotation.cpp
+  src/core/EnvOut.cpp)
 target_include_directories(smr_core PUBLIC src/core)
+target_compile_features(smr_core PUBLIC cxx_std_17)
+if(NOT MSVC)
+  target_compile_options(smr_core PRIVATE -ffp-contract=off -O2)
+  # The upstream table headers (included verbatim) fill nested arrays with flat brace lists.
+  set_source_files_properties(src/core/Tables.cpp PROPERTIES COMPILE_OPTIONS "-Wno-missing-braces")
+endif()
 set_target_properties(smr_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-# --- Headless test of the core:  cmake --build build --target core_test && build/core_test ---
-add_executable(core_test EXCLUDE_FROM_ALL tests/core_test.cpp)
+# --- src/host: resampler and block adapter. Plain C++, no JUCE. ---
+add_library(smr_host STATIC src/host/Resampler.cpp src/host/BlockAdapter.cpp)
+target_include_directories(smr_host PUBLIC src/host)
+target_link_libraries(smr_host PUBLIC smr_core)
+if(NOT MSVC)
+  target_compile_options(smr_host PRIVATE -ffp-contract=off -O2)
+endif()
+set_target_properties(smr_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# --- Tests and tools (built on request, e.g. cmake --build build --target smr_render) ---
+# Same floating-point flags as the core, so the tests exercise the code as it is built.
+function(smr_test_target name)
+  add_executable(${name} EXCLUDE_FROM_ALL ${ARGN})
+  if(NOT MSVC)
+    target_compile_options(${name} PRIVATE -ffp-contract=off -O2)
+  endif()
+endfunction()
+
+smr_test_target(core_test tests/core_test.cpp)                       # Milestone 0 pass-through test
 target_link_libraries(core_test PRIVATE smr_core)
+
+smr_test_target(smr_core_tests tests/core_tests.cpp)                 # V2, V3, V5, scheduler, adapter, resampler, V4 hash
+target_link_libraries(smr_core_tests PRIVATE smr_host smr_core)
+
+smr_test_target(port_driver tests/oracle/port_driver.cpp)            # V1: the port side of the differential test
+target_link_libraries(port_driver PRIVATE smr_core)
+target_include_directories(port_driver PRIVATE tests/oracle)
+
+smr_test_target(gen_stimulus tests/oracle/gen_stimulus.cpp)
+target_include_directories(gen_stimulus PRIVATE tests/oracle)
+
+smr_test_target(trace_diff tests/oracle/trace_diff.cpp)
+
+smr_test_target(smr_render tools/smr_render/main.cpp)                # offline renderer
+target_link_libraries(smr_render PRIVATE smr_host smr_core)
+
+smr_test_target(wav_tool tests/wav_tool.cpp)                         # V6 helper
 
 # Lets the core and its test be configured on any machine without downloading JUCE.
 option(SMR_CORE_ONLY "Configure only src/core and tests (no JUCE, no plugin)" OFF)

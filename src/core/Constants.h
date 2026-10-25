@@ -1,0 +1,73 @@
+// src/core: DSP only. No JUCE, no plugin-host code, no hardware code.
+// Constants copied from the firmware (third_party/SMR at 79bc953). Each line names its source.
+#pragma once
+
+#include <cstdint>
+
+namespace smr
+{
+    // globals.h
+    constexpr int kNumFilts      = 20;   // NUM_FILTS
+    constexpr int kNumChannels   = 6;    // NUM_CHANNELS
+    constexpr int kNumScales     = 11;   // NUMSCALES
+    constexpr int kNumScaleBanks = 20;   // NUMSCALEBANKS (bank 19 is the user bank)
+
+    // filter.c: MONO_BUFSZ = ((codec_BUFF_LEN/2)/2)/2 = 16 frames per block
+    constexpr int kBlockFrames   = 16;
+
+    // dig_inouts.h
+    constexpr int kNumAdcs       = 15;   // NUM_ADCS
+    constexpr int kNumAdc3s      = 7;    // NUM_ADC3S
+    constexpr int MORPH_ADC      = 0;
+    constexpr int QVAL_ADC       = 1;
+    constexpr int LEVEL_ADC_BASE = 2;    // 2..7 are the Level CV jacks
+    constexpr int FREQNUDGE1_ADC = 8;
+    constexpr int FREQNUDGE6_ADC = 9;
+    constexpr int SCALE_ADC      = 10;
+    constexpr int SPREAD_ADC     = 11;
+    constexpr int ROTCV_ADC      = 12;
+    constexpr int FREQCV1_ADC    = 13;
+    constexpr int FREQCV6_ADC    = 14;
+    constexpr int QPOT_ADC       = 0;    // potadc_buffer
+    constexpr int SLIDER_ADC_BASE = 1;   // 1..6 are the sliders
+
+    // Table geometry (see docs/architecture.md section 13.2)
+    constexpr int kScaleStride   = 21;   // 20 notes plus one pad, per scale
+    constexpr int kMaxqTableSize = 231;  // 21 x 11
+    constexpr int kBpreTableSize = 693;  // 21 x 3 x 11
+    constexpr int kBpreScaleStride = 63; // 21 x 3
+    constexpr int kNumStockBanks = 19;   // banks 0..18 have tables; bank 19 is user_scalebank
+    constexpr int kExpTableSize  = 4096;
+    constexpr int kTwopassCalSize = 3380;
+
+    // Core sample rate (decision M2-a/M2-b: the nominal 96000 Hz, held in one place).
+    // The rate is the rational kCoreRateNum / kCoreRateDen so a different rate can be
+    // set later without floating-point drift in the tick scheduler.
+    constexpr uint64_t kCoreRateNum = 96000;
+    constexpr uint64_t kCoreRateDen = 1;
+
+    // Timer clock for TIM9 and TIM10 (docs/architecture.md section 11.2, derived).
+    constexpr uint64_t kTimerClockHz = 168000000ULL;
+
+    // Timer periods: counts per update = register value + 1 (params.c "168MHz / (Period+1)").
+    constexpr uint64_t kTim10Counts = 8195 + 1;    // params.c init_freq_update_timer
+    constexpr uint64_t kTim9Counts  = 30000 + 1;   // envout_pwm.c init_ENV_update_timer
+    // Main loop: placeholder 12,000 iterations per second (decision M2-c, docs/open-questions.md).
+    constexpr uint64_t kLoopRateHz  = 12000;
+    constexpr uint64_t kLoopCounts  = kTimerClockHz / kLoopRateHz;   // 14000 counts at 168 MHz
+
+    // filter.h CROSSFADE_POINT is written "4095 * 2 / 3" with no brackets: integer 2730.
+    constexpr int kCrossfadePoint = 4095 * 2 / 3;
+    constexpr int kCrossfadeWidth = 1800;
+    constexpr int kCfMin = kCrossfadePoint - kCrossfadeWidth / 2;   // 1830
+    constexpr int kCfMax = kCrossfadePoint + kCrossfadeWidth / 2;   // 3630
+
+    // globals.h
+    enum FilterMode : int { TWOPASS = 2, ONEPASS = 3 };
+    enum FilterType : int { BPRE = 0, MAXQ = 1 };
+    constexpr uint32_t PRE  = 0;
+    constexpr uint32_t POST = 1;
+
+    // params.h
+    enum EnvOutMode : int { ENV_SLOW = 0, ENV_FAST = 1, ENV_TRIG = 2, ENV_VOLTOCT = 3 };
+}

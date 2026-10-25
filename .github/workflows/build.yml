@@ -10,6 +10,201 @@ env:
   SMR_PINNED_COMMIT: 79bc953bb4b9cf47614d317b4ba9fc9f615c43ea
 
 jobs:
+  # ---------------------------------------------------------------------------------------------------------
+  # Milestone 2, V1 and V1a: the unmodified firmware files (the oracle) against the port, bit for bit.
+  # Ubuntu with GCC, because the firmware needs -fsingle-precision-constant, which Clang does not have.
+  oracle-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Check the firmware submodule is at the pinned commit
+        run: |
+          actual=$(git -C third_party/SMR rev-parse HEAD)
+          [ "$actual" = "$SMR_PINNED_COMMIT" ] || { echo "::error::third_party/SMR is not at the pinned commit ($actual)"; exit 1; }
+          gcc --version | head -1
+
+      - name: Build the port tools with GCC (-O2 -ffp-contract=off)
+        run: |
+          cmake -S . -B build_linux -DSMR_CORE_ONLY=ON -DCMAKE_BUILD_TYPE=Release > cmake_log.txt 2>&1 || {
+            tail -20 cmake_log.txt; grep -E "error|Error" cmake_log.txt | head -8 | cut -c1-400 | while IFS= read -r line; do echo "::error::CONFIGURE: $line"; done; exit 1; }
+          cmake --build build_linux --target port_driver gen_stimulus trace_diff smr_core_tests -j4 > build_log.txt 2>&1 || {
+            grep -E "error|Error" build_log.txt | head -15 | cut -c1-400 | while IFS= read -r line; do echo "::error::BUILD(port): $line"; done
+            tail -30 build_log.txt; exit 1; }
+          tail -3 build_log.txt
+          echo "::notice::BUILD(port) GCC ok: port_driver gen_stimulus trace_diff smr_core_tests"
+
+      - name: Build the oracle (unmodified firmware files plus the test shim)
+        run: |
+          set -u
+          FW=third_party/SMR
+          mkdir -p oracle_build
+          sed -n '/^float DEFAULT_user_scalebank\[21\]={/,/^};/p' $FW/user_scales.c > oracle_build/default_user_scalebank.inc
+          [ -s oracle_build/default_user_scalebank.inc ] || { echo "::error::could not extract DEFAULT_user_scalebank"; exit 1; }
+          CF="-std=gnu99 -O2 -ffp-contract=off -fsingle-precision-constant -fno-tree-loop-distribute-patterns -w -Itests/oracle/shim -I$FW -I$FW/filter_coefs -Ioracle_build"
+          fail=0
+          for f in filter params rotation lpf envout_pwm; do
+            gcc $CF -c $FW/$f.c -o oracle_build/$f.o > oracle_build/$f.log 2>&1 || { fail=1; echo "---- $f.c"; cat oracle_build/$f.log
+              grep -E "error" oracle_build/$f.log | head -12 | cut -c1-400 | while IFS= read -r line; do echo "::error::ORACLE-COMPILE $f.c: $line"; done; }
+          done
+          gcc $CF -c tests/oracle/shim/shim_globals.c -o oracle_build/shim_globals.o > oracle_build/shim.log 2>&1 || { fail=1; cat oracle_build/shim.log
+              grep -E "error" oracle_build/shim.log | head -12 | cut -c1-400 | while IFS= read -r line; do echo "::error::ORACLE-COMPILE shim_globals.c: $line"; done; }
+          g++ -std=c++17 -O2 -ffp-contract=off -Itests/oracle -c tests/oracle/oracle_driver.cpp -o oracle_build/oracle_driver.o > oracle_build/driver.log 2>&1 || { fail=1; cat oracle_build/driver.log
+              grep -E "error" oracle_build/driver.log | head -12 | cut -c1-400 | while IFS= read -r line; do echo "::error::ORACLE-COMPILE oracle_driver.cpp: $line"; done; }
+          [ $fail -eq 0 ] || exit 1
+          g++ oracle_build/*.o -o oracle_driver -lm > oracle_build/link.log 2>&1 || {
+            cat oracle_build/link.log
+            grep -o "undefined reference to .*" oracle_build/link.log | sort -u | head -40 | cut -c1-200 | while IFS= read -r line; do echo "::error::ORACLE-LINK: $line"; done
+            grep -E "multiple definition" oracle_build/link.log | sort -u | head -10 | cut -c1-300 | while IFS= read -r line; do echo "::error::ORACLE-LINK: $line"; done
+            exit 1; }
+          echo "::notice::BUILD(oracle) GCC ok: firmware filter.c params.c rotation.c lpf.c envout_pwm.c linked with the shim"
+
+      - name: V1a table fidelity (tables the firmware really uses against the port's tables)
+        run: |
+          ./oracle_driver tables oracle_tables.trace
+          ./build_linux/port_driver tables port_tables.trace
+          if out=$(./build_linux/trace_diff oracle_tables.trace port_tables.trace); then
+            echo "$out"; echo "::notice::V1a tables PASS: $out"
+          else
+            echo "$out"; echo "::error::V1a tables FAIL: $out"; exit 1
+          fi
+
+      - name: V1 differential test (8 scenarios x 30000 blocks, bit for bit)
+        run: |
+          bad=0
+          for i in 0 1 2 3 4 5 6 7; do
+            ./build_linux/gen_stimulus $i 30000 stim_$i.bin || { echo "::error::V1 scenario $i: gen_stimulus failed"; bad=1; continue; }
+            ./oracle_driver trace stim_$i.bin oracle_$i.trace || { echo "::error::V1 scenario $i: oracle_driver failed"; bad=1; continue; }
+            pout=$(./build_linux/port_driver trace stim_$i.bin port_$i.trace) || { echo "::error::V1 scenario $i: port_driver failed"; bad=1; continue; }
+            echo "$pout"
+            if out=$(./build_linux/trace_diff oracle_$i.trace port_$i.trace); then
+              echo "::notice::V1 scenario $i PASS: $out ($pout)"
+            else
+              echo "::error::V1 scenario $i FAIL: $out ($pout)"; bad=1
+            fi
+          done
+          exit $bad
+
+      - name: V1 negative control (one changed input sample must be detected)
+        run: |
+          python3 - <<'PY'
+          d = bytearray(open('stim_0.bin', 'rb').read())
+          off = 12 + 195 * 100 + 67 + 1      # step 100, inL[0], second byte
+          d[off] ^= 0x40
+          open('stim_ctl.bin', 'wb').write(d)
+          PY
+          ./build_linux/port_driver trace stim_ctl.bin port_ctl.trace > /dev/null
+          if ./build_linux/trace_diff oracle_0.trace port_ctl.trace > ctl_out.txt; then
+            cat ctl_out.txt; echo "::error::V1 negative control FAIL: the comparison did not notice a changed input sample"; exit 1
+          else
+            cat ctl_out.txt; echo "::notice::V1 negative control PASS (comparison detects a change): $(cat ctl_out.txt)"
+          fi
+
+      - name: Core tests with GCC on x86-64 (V2, V3, V5, scheduler, adapter, resampler)
+        run: |
+          ./build_linux/smr_core_tests > core_tests_log.txt 2>&1; code=$?
+          cat core_tests_log.txt
+          grep -E "^FAIL" core_tests_log.txt | head -15 | cut -c1-400 | while IFS= read -r line; do echo "::error::TEST(linux): $line"; done
+          echo "::notice::TEST(linux) $(grep -E '^(PASS|FAIL): [0-9]+ checks' core_tests_log.txt) $(grep '^INFO' core_tests_log.txt)"
+          grep -E "^PASS: V5" core_tests_log.txt | cut -c1-300 | while IFS= read -r line; do echo "::notice::TEST(linux) $line"; done
+          exit $code
+
+  # ---------------------------------------------------------------------------------------------------------
+  # Milestone 2 on macOS: core tests, V4 (arm64 against x86-64), V6 (renderer end to end), renderer artifact.
+  core-macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure and build tests and renderer (universal, macOS 12.0 minimum)
+        run: |
+          cmake -S . -B build -DSMR_CORE_ONLY=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 > cmake_log.txt 2>&1 || {
+            tail -20 cmake_log.txt; grep -E "error|Error" cmake_log.txt | head -8 | cut -c1-400 | while IFS= read -r line; do echo "::error::CONFIGURE: $line"; done; exit 1; }
+          cmake --build build --target smr_core_tests smr_render wav_tool -j4 > build_log.txt 2>&1 || {
+            grep -E "error|Error" build_log.txt | head -15 | cut -c1-400 | while IFS= read -r line; do echo "::error::BUILD(mac): $line"; done
+            tail -30 build_log.txt; exit 1; }
+          tail -3 build_log.txt
+          for b in smr_core_tests smr_render wav_tool; do echo "$b: $(lipo -archs build/$b)"; done
+          echo "::notice::BUILD(mac) ok: smr_core_tests smr_render wav_tool, archs $(lipo -archs build/smr_render)"
+
+      - name: Core tests (arm64 native)
+        run: |
+          arch -arm64 ./build/smr_core_tests > core_tests_arm64.txt 2>&1; code=$?
+          cat core_tests_arm64.txt
+          grep -E "^FAIL" core_tests_arm64.txt | head -15 | cut -c1-400 | while IFS= read -r line; do echo "::error::TEST(arm64): $line"; done
+          echo "::notice::TEST(arm64) $(grep -E '^(PASS|FAIL): [0-9]+ checks' core_tests_arm64.txt) $(grep '^INFO' core_tests_arm64.txt)"
+          grep -E "^PASS: V5" core_tests_arm64.txt | cut -c1-300 | while IFS= read -r line; do echo "::notice::TEST(arm64) $line"; done
+          exit $code
+
+      - name: Core tests (x86-64 through Rosetta)
+        continue-on-error: true
+        run: |
+          if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+            softwareupdate --install-rosetta --agree-to-license > rosetta_log.txt 2>&1 || true
+          fi
+          if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+            echo "::warning::V4 SKIPPED: this runner cannot run x86-64 code (Rosetta not available)"; exit 0
+          fi
+          arch -x86_64 ./build/smr_core_tests > core_tests_x86.txt 2>&1; code=$?
+          grep -E "^FAIL" core_tests_x86.txt | head -15 | cut -c1-400 | while IFS= read -r line; do echo "::error::TEST(x86-64): $line"; done
+          echo "::notice::TEST(x86-64) $(grep -E '^(PASS|FAIL): [0-9]+ checks' core_tests_x86.txt) $(grep '^INFO' core_tests_x86.txt)"
+          h_arm=$(arch -arm64 ./build/smr_core_tests --hash)
+          h_x86=$(arch -x86_64 ./build/smr_core_tests --hash)
+          echo "arm64:  $h_arm"; echo "x86-64: $h_x86"
+          if [ "$h_arm" = "$h_x86" ]; then echo "::notice::V4 PASS: identical fixed-render hash on arm64 and x86-64: $h_arm"
+          else echo "::error::V4 FAIL: arm64 $h_arm, x86-64 $h_x86"; code=1; fi
+          exit $code
+
+      - name: V6 renderer end to end (mono and stereo; 44.1, 48 and 96 kHz)
+        run: |
+          mkdir -p v6 && cd v6
+          bad=0
+          for rate in 44100 48000 96000; do
+            for ch in 1 2; do
+              ../build/wav_tool gen in_${rate}_${ch}.wav $rate $ch 3 || { bad=1; continue; }
+              ../build/smr_render in_${rate}_${ch}.wav out_${rate}_${ch}.wav > render_${rate}_${ch}.txt 2>&1 || { cat render_${rate}_${ch}.txt; echo "::error::V6 render failed at $rate Hz, $ch ch: $(head -1 render_${rate}_${ch}.txt)"; bad=1; continue; }
+              cat render_${rate}_${ch}.txt
+              if out=$(../build/wav_tool check out_${rate}_${ch}.wav $rate 4.9); then echo "::notice::V6 $out"; else echo "::error::V6 $out"; bad=1; fi
+            done
+          done
+          # unsupported rate must be refused with a clear message
+          ../build/wav_tool gen in_47999.wav 47999 2 1
+          if ../build/smr_render in_47999.wav out_47999.wav > refuse.txt 2>&1; then echo "::error::V6 an unsupported sample rate was accepted"; bad=1; else echo "::notice::V6 unsupported rate refused: $(head -1 refuse.txt | cut -c1-200)"; fi
+          # controls and script
+          printf '0.5 adc 0 3000\n1.0 rotup\n1.5 pot 0 4000\n' > script.txt
+          ../build/smr_render in_44100_2.wav out_ctl.wav --mode onepass --type bpre --bank 5 --adc 11=2500 --sw cvlag=1 --script script.txt > ctl.txt 2>&1 || { cat ctl.txt; echo "::error::V6 render with controls failed"; bad=1; }
+          if out=$(../build/wav_tool check out_ctl.wav 44100 4.9); then echo "::notice::V6 controls and script: $out"; else echo "::error::V6 controls and script: $out"; bad=1; fi
+          exit $bad
+
+      - name: Package the renderer (ad-hoc signed, universal)
+        run: |
+          mkdir -p dist/smr-render
+          cp build/smr_render dist/smr-render/
+          codesign --force -s - dist/smr-render/smr_render
+          codesign --verify --verbose=2 dist/smr-render/smr_render
+          cp docs/renderer-howto.txt dist/smr-render/README.txt
+          cp THIRD-PARTY-LICENSES.txt dist/smr-render/
+          cp -R licenses dist/smr-render/
+          archs=$(lipo -archs dist/smr-render/smr_render)
+          for a in arm64 x86_64; do
+            lipo -thin $a dist/smr-render/smr_render -output /tmp/slice_$a
+            minos=$(otool -l /tmp/slice_$a | grep -A4 -E "LC_BUILD_VERSION|LC_VERSION_MIN" | grep -E "minos|version" | head -1 | awk '{print $2}')
+            echo "::notice::INSPECT smr_render slice $a minos=$minos"
+            [ "$minos" = "12.0" ] || { echo "::error::smr_render slice $a minos is '$minos', expected 12.0"; exit 1; }
+          done
+          echo "::notice::INSPECT smr_render archs=$archs"
+          (cd dist && ditto -c -k --keepParent smr-render ../Unofficial-SMR-renderer.zip)
+          ls -la Unofficial-SMR-renderer.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Unofficial-SMR-renderer-macOS
+          path: Unofficial-SMR-renderer.zip
+
   build-macos:
     runs-on: macos-15     # Apple silicon runner (macos-14 is retired 2 Nov 2026)
     steps:

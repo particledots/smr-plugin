@@ -1,0 +1,25 @@
+Unofficial SMR - offline renderer (Milestone 2)
+================================================
+
+smr_render plays a WAV file through the ported SMR core (firmware v5.1.1, commit 79bc953, no enhancements)
+and writes a new WAV. It is a command-line tool, not a plugin.
+
+1. Unzip this folder somewhere, for example your Desktop.
+2. Open Terminal and clear the macOS quarantine flag (it blocks downloaded programs):
+
+     xattr -dr com.apple.quarantine ~/Desktop/smr-render
+
+3. Run it on a WAV file:
+
+     cd ~/Desktop/smr-render
+     ./smr_render ~/Desktop/mytest.wav ~/Desktop/mytest_smr.wav
+
+4. All options:   ./smr_render --help
+
+The output is a 32-bit float stereo WAV at the same sample rate as the input.
+Supported input sample rates: 22050 32000 44100 48000 88200 96000 176400 192000 (96000 is bit-exact; the others use a resampler).
+Mono or stereo input, 8/16/24/32-bit PCM or float.
+
+The line "audio saturation events" in the summary should normally be 0.
+
+Licences: see THIRD-PARTY-LICENSES.txt and the licenses folder. Unofficial: this is not a 4ms product.
