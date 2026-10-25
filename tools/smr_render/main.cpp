@@ -71,8 +71,10 @@ namespace
         if (eq == std::string::npos) return false;
         char* e1 = nullptr;
         char* e2 = nullptr;
-        k = (int) std::strtol (s.substr (0, eq).c_str(), &e1, 10);
-        v = (int) std::strtol (s.substr (eq + 1).c_str(), &e2, 10);
+        const std::string ks = s.substr (0, eq), vs = s.substr (eq + 1);   // named strings: e1 and e2 point into them
+        if (ks.empty() || vs.empty()) return false;
+        k = (int) std::strtol (ks.c_str(), &e1, 10);
+        v = (int) std::strtol (vs.c_str(), &e2, 10);
         return *e1 == 0 && *e2 == 0;
     }
 
