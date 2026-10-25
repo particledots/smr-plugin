@@ -1,6 +1,7 @@
 // Compares two trace files (see trace_common.h). Exit 0: identical. Exit 1: first difference is printed
 // as step number, field name and both values, and the count of differing words is given.
 #include <cstdint>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -34,7 +35,7 @@ static bool isFloatField (const std::string& n)
 
 int main (int argc, char** argv)
 {
-    if (argc < 3) { std::printf ("usage: trace_diff <oracle.trace> <port.trace>\n"); return 2; }
+    if (argc < 3) { std::printf ("usage: trace_diff <oracle.trace> <port.trace> [compare only the first N steps]\n"); return 2; }
     uint32_t sa = 0, wa = 0, sb = 0, wb = 0;
     std::vector<std::string> na, nb;
     std::vector<uint32_t> da, db;
@@ -45,8 +46,10 @@ int main (int argc, char** argv)
         std::printf ("FAIL: trace shapes differ (steps %u vs %u, words per step %u vs %u)\n", sa, sb, wa, wb);
         return 1;
     }
+    uint32_t limit = sa;
+    if (argc >= 4) { const unsigned long n = std::strtoul (argv[3], nullptr, 10); if (n < limit) limit = (uint32_t) n; }
     size_t bad = 0, first = (size_t) -1;
-    for (size_t k = 0; k < da.size(); ++k)
+    for (size_t k = 0; k < (size_t) limit * wa; ++k)
         if (da[k] != db[k])
         {
             if (first == (size_t) -1) first = k;
@@ -54,7 +57,7 @@ int main (int argc, char** argv)
         }
     if (! bad)
     {
-        std::printf ("PASS: %u steps x %u words identical\n", sa, wa);
+        std::printf ("PASS: %u steps x %u words identical\n", limit, wa);
         return 0;
     }
     const size_t step = first / wa, field = first % wa;

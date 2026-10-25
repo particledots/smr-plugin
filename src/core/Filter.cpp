@@ -12,10 +12,11 @@ namespace smr
         // reach through undefined behaviour (docs/port-notes.md item P-5).
         inline uint32_t clampIdx (uint32_t i, uint32_t maxIdx) noexcept { return i > maxIdx ? maxIdx : i; }
 
-        // twopass_calibration is declared [3380]; indices past it read as 0 (docs/port-notes.md item P-5).
+        // twopass_calibration is declared [3380]; the firmware can index past it (qval overshoots 4095, see param_read_q).
+        // The port reads the last entry instead (docs/port-notes.md item P-5).
         inline float twopassCal (const Tables& t, uint32_t idx) noexcept
         {
-            return idx < (uint32_t) kTwopassCalSize ? (float) t.twopass_calibration[idx] : 0.0f;
+            return (float) t.twopass_calibration[idx < (uint32_t) kTwopassCalSize ? idx : (uint32_t) kTwopassCalSize - 1u];
         }
     }
 

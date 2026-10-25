@@ -13,6 +13,10 @@
 extern "C" {
 #endif
 
+// ARM "usat dst, #12, src": signed saturate to the unsigned range 0..4095. Used through the -Dasm(...) option that the
+// oracle build gives ONLY envout_pwm.c, so the unmodified firmware line can be compiled on x86.
+static inline uint32_t oracle_usat12(uint32_t v) { int32_t s = (int32_t)v; return s < 0 ? 0u : (s > 4095 ? 4095u : (uint32_t)s); }
+
 #define __IO volatile
 #define __I  volatile const
 

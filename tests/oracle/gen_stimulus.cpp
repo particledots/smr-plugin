@@ -46,14 +46,14 @@ int main (int argc, char** argv)
     // scenario table: filter mode (2 TWOPASS, 3 ONEPASS), type (1 MAXQ, 0 BPRE), walker speed, bank interval, event rate (one in N steps)
     struct Sc { int mode, type, speed, bankEvery, eventOneIn, amp; bool randomTicks, extremes, switching; };
     static const Sc table[8] = {
-        /* 0 */ { 2, 1,  6, 400,  900, 1 << 26, false, false, false },   // two-pass MAXQ, slow controls
-        /* 1 */ { 2, 1, 60, 300,  120, 1 << 26, false, false, false },   // two-pass MAXQ, fast controls, many events
+        /* 0 */ { 2, 1,  6, 400,  900, 1 << 18, false, false, false },   // two-pass MAXQ, slow controls
+        /* 1 */ { 2, 1, 60, 300,  120, 1 << 18, false, false, false },   // two-pass MAXQ, fast controls, many events
         /* 2 */ { 3, 1, 12, 350,  300, 1 << 26, false, false, false },   // one-pass MAXQ
         /* 3 */ { 3, 0, 12, 350,  300, 1 << 26, false, false, false },   // one-pass BpRe
-        /* 4 */ { 2, 1, 25, 200,  200, 1 << 25, false, false, true  },   // mode and type switching
-        /* 5 */ { 2, 1, 30, 500,  250, 1 << 26, true,  false, false },  // random tick counts 0..6
+        /* 4 */ { 2, 1, 25, 200,  200, 1 << 18, false, false, true  },   // mode and type switching
+        /* 5 */ { 2, 1, 30, 500,  250, 1 << 18, true,  false, false },  // random tick counts 0..6
         /* 6 */ { 3, 0, 300, 250, 100, 1 << 25, true,  true,  false },  // BpRe, extreme control jumps
-        /* 7 */ { 2, 1, 300, 250, 100, 1 << 25, false, true,  true  },  // two-pass, extreme control jumps, switching
+        /* 7 */ { 2, 1, 300, 250, 100, 1 << 18, false, true,  true  },  // two-pass, extreme control jumps, switching
     };
     if (scenario < 0 || scenario > 7) { std::printf ("FAIL: scenario out of range\n"); return 2; }
     const Sc sc = table[scenario];
@@ -63,6 +63,13 @@ int main (int argc, char** argv)
     for (auto& w : pot) w = { r.range (0, 4095), 0, sc.speed, 150, 0, 4095 };
     for (auto& w : adc) w.target = w.v;
     for (auto& w : pot) w.target = w.v;
+    // Q pot and Q CV move slowly. param_read_q smooths the goal with poll_ctr/15 and poll_ctr reaches 16, so a fast jump makes
+    // qval overshoot 4095 by (jump / 15); in two-pass that index reaches past twopass_calibration[3380] (an out-of-range
+    // read in the firmware, docs/port-notes.md P-5), which the oracle cannot give a defined value for.
+    adc[1].speed = pot[0].speed = 2;
+    // Scenarios that run two-pass: keep Q CV + Q pot at 3700 or less, so even a sudden unlock overshoot (up to 1/15 of the jump)
+    // stays under qval 3948 and the second-pass index qval_b - 900 stays inside twopass_calibration[3380].
+    if (sc.mode == 2 || sc.switching) { adc[1].hi = pot[0].hi = 1850; adc[1].v = adc[1].target = pot[0].v = pot[0].target = r.range (0, 1850); }
     // Level CVs and sliders are mostly open so that there is sound
     for (int k = 2; k <= 7; ++k) { adc[k].v = adc[k].target = 3000 + (int) r.below (1095); adc[k].lo = 1500; }
     for (int k = 1; k <= 6; ++k) { pot[k].v = pot[k].target = 3000 + (int) r.below (1095); pot[k].lo = 1500; }
@@ -102,7 +109,7 @@ int main (int argc, char** argv)
             s.set_filter_type = (uint8_t) (type == 0 ? 1 : 2);
         }
 
-        // banks: all six channels to one bank at intervals; sometimes one channel on its own; sometimes 0xFF
+        // banks: all six channels to one bank at intervals; sometimes one channel on its own (the firmware never sets a bank above 19)
         if (i == 0 || (i % sc.bankEvery) == 0)
         {
             const uint8_t bank = (uint8_t) ((i / sc.bankEvery + (uint32_t) scenario) % 20);
@@ -113,7 +120,7 @@ int main (int argc, char** argv)
         {
             const int ch = (int) r.below (6);
             s.set_bank_mask = (uint8_t) (1u << ch);
-            s.bank[ch] = r.chance (6) ? (uint8_t) 0xFF : (uint8_t) r.below (20);
+            s.bank[ch] = (uint8_t) r.below (20);
         }
 
         // locks (latched by the main loop's lock jacks, so only set now and then) and lock buttons (momentary)

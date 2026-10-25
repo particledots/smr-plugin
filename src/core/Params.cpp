@@ -524,7 +524,6 @@ namespace smr
             {
                 qval[i] = f2u32 (qval_goal[i]);
             }
-            if (qval[i] > 4095) qval[i] = 4095;   // port guard (docs/port-notes.md item P-5): indexes tables in filter.c
         }
     }
 

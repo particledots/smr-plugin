@@ -69,6 +69,10 @@ static int runTrace (const char* stimPath, const char* outPath)
 
     Trace tr;
     int32_t outA[16], outB[16];
+    // The comparison is only meaningful before the first output saturation: the firmware converts float to int32 with ARM
+    // saturation, the x86 oracle converts overflow to INT_MIN. valid_steps counts the steps before that block.
+    uint32_t validSteps = 0;
+    bool saturated = false;
     for (const Step& s : steps)
     {
         if (s.set_filter_mode) e->setFilterMode ((smr::FilterMode) s.set_filter_mode);
@@ -99,11 +103,13 @@ static int runTrace (const char* stimPath, const char* outPath)
         for (unsigned n = 0; n < s.tim10; ++n) e->runTim10Tick();
         for (unsigned n = 0; n < s.loop; ++n)  e->runLoopPass();
 
+        if (e->saturation_count != 0) saturated = true;
+        if (! saturated) ++validSteps;
         tr.beginStep();
         emitState (tr, *e);
         tr.endStep();
     }
-    std::printf ("saturation_count=%llu loop_guard_trips=%llu\n", (unsigned long long) e->saturation_count, (unsigned long long) e->loop_guard_trips);
+    std::printf ("saturation_count=%llu loop_guard_trips=%llu valid_steps=%u\n", (unsigned long long) e->saturation_count, (unsigned long long) e->loop_guard_trips, validSteps);
     return tr.write (outPath) ? 0 : 2;
 }
 
@@ -119,6 +125,7 @@ static int runTables (const char* outPath)
     dumpWords (tr, "twopass_calibration", tb.twopass_calibration, 3380);
 
     std::unique_ptr<smr::Engine> e (new smr::Engine());
+    e->reset();   // loads the factory-default user scale bank (bank 19), as the oracle does with set_default_user_scalebank()
     char nm[48];
     int32_t a[16] = {}, b[16] = {};
     for (int type = 0; type < 2; ++type)

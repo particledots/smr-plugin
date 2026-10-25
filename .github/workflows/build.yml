@@ -46,7 +46,7 @@ jobs:
           CF="-std=gnu99 -O2 -ffp-contract=off -fsingle-precision-constant -fno-tree-loop-distribute-patterns -w -Itests/oracle/shim -I$FW -I$FW/filter_coefs -Ioracle_build"
           fail=0
           for f in filter params rotation lpf envout_pwm; do
-            gcc $CF -c $FW/$f.c -o oracle_build/$f.o > oracle_build/$f.log 2>&1 || { fail=1; echo "---- $f.c"; cat oracle_build/$f.log
+            gcc $CF "-Dasm(...)=result=oracle_usat12(result)" -c $FW/$f.c -o oracle_build/$f.o > oracle_build/$f.log 2>&1 || { fail=1; echo "---- $f.c"; cat oracle_build/$f.log
               grep -E "error" oracle_build/$f.log | head -12 | cut -c1-400 | while IFS= read -r line; do echo "::error::ORACLE-COMPILE $f.c: $line"; done; }
           done
           gcc $CF -c tests/oracle/shim/shim_globals.c -o oracle_build/shim_globals.o > oracle_build/shim.log 2>&1 || { fail=1; cat oracle_build/shim.log
@@ -79,7 +79,10 @@ jobs:
             ./oracle_driver trace stim_$i.bin oracle_$i.trace || { echo "::error::V1 scenario $i: oracle_driver failed"; bad=1; continue; }
             pout=$(./build_linux/port_driver trace stim_$i.bin port_$i.trace) || { echo "::error::V1 scenario $i: port_driver failed"; bad=1; continue; }
             echo "$pout"
-            if out=$(./build_linux/trace_diff oracle_$i.trace port_$i.trace); then
+            valid=${pout##*valid_steps=}
+            # Past the first output saturation the x86 oracle (float overflow gives INT_MIN) and the ARM-style port (clamps) differ by design.
+            if [ "$valid" -lt 500 ]; then echo "::error::V1 scenario $i: only $valid valid steps before the first saturation ($pout)"; bad=1; continue; fi
+            if out=$(./build_linux/trace_diff oracle_$i.trace port_$i.trace $valid); then
               echo "::notice::V1 scenario $i PASS: $out ($pout)"
             else
               echo "::error::V1 scenario $i FAIL: $out ($pout)"; bad=1
