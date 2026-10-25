@@ -17,9 +17,21 @@ Not tested: VST3 in any host (Logic loads AU only).
 Choices made (see docs/open-questions.md): JUCE 8.0.6, AU type effect (aufx), codes Ptdt/Smru,
 runner macos-15 (macos-14 retires 2 Nov 2026).
 
-## Next: Milestone 1, source audit
-Produce docs/architecture.md from the firmware source and the manual. Bryn answers the open
-questions in docs/open-questions.md. No code changes in Milestone 1.
+## Milestone 1: Source audit. WRITTEN, waiting for your review
+
+Delivered (no code changes, nothing built or run):
+- docs/architecture.md: timing domains, signal path, dependencies of filter.c, params.c,
+  rotation.c and the limiter/slew code, hardware-only inventory, keep/stub/drop table,
+  licence findings, numerical-fidelity notes.
+- docs/open-questions.md: Q6, Q7, Q8 answered; kickoff-pack list settled where the source
+  decides it; 20 manual-versus-source items (M1-a to M1-t) for you to decide.
+
+Key findings: `limiter.c` is never called (no limiter in v5.1.1); no `arm_*` function is called, so
+no CMSIS code is needed; `rotary.c/.h` is GPLv3 and hardware-only (stays out); stmlib is not used.
+
+Milestone 1 is done when you approve the plan and the keep/stub/drop list. Not approved yet.
+
+## Next: Milestone 2, headless DSP core (after you approve Milestone 1)
 
 Note: CI logs cannot be downloaded in Claude's session (HTTP 403). The workflow writes results as
 annotations (archs, minos, auval) so they can be read through the API.
