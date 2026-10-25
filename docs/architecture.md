@@ -272,5 +272,211 @@ Default notes: bank 0 (Major), scale index 6, notes 5..10 give 65.40, 73.41, 82.
 `src/core` takes plain structs: a `Params` struct (the values that `params.c` writes today),
 `process(const float *in, float *outOdd, float *outEven, int n)` blocks of 16, and a `State`
 holding `buf`, `buf_a`, morph and motion state. No JUCE, no globals touched by hardware, no
-file I/O. `src/plugin` owns parameters, host state, GUI, sample-rate handling and the tick
-scheduler. Hardware-only items from section 6 never enter `src/core`.
+file I/O. `src/plugin` owns parameters, host state and the GUI. Hardware-only items from
+section 6 never enter `src/core`.
+
+**Changed in Milestone 2 (needs your approval, see section 14):** the tick scheduler moves into
+`src/core` (it is firmware timing, identical for every host), and sample-rate conversion plus the
+16-frame block adapter go into a new plain-C++ folder `src/host` (no JUCE), so that the plugin and
+the offline renderer share one implementation. This replaces the earlier wording that gave both to
+`src/plugin`.
+
+## 11. Tick scheduler (Milestone 2 design, not yet implemented)
+
+### 11.1 What runs when in the firmware
+| Context | File, function | Runs | Period register | NVIC priority |
+|---|---|---|---|---|
+| Audio DMA | `i2s.c` `DMA1_Stream3_IRQHandler` (`codec.h`: `AUDIO_I2S_EXT_DMA_IRQ` is `DMA1_Stream3_IRQn`) | `process_audio_block` on 16 frames, once per half-transfer | I2S clock | 0 / 0 (`i2s.c` `I2S_Block_Init`) |
+| TIM10 | `params.c` `TIM1_UP_TIM10_IRQHandler` | `param_read_freq()`, `update_slider_LEDs()`, `update_motion()` | 8195 (`init_freq_update_timer`) | 1 / 0 |
+| TIM9 | `envout_pwm.c` `ENV_update_IRQHandler` (`envout_pwm.h:41` defines it as `TIM1_BRK_TIM9_IRQHandler`, so it is wired) | `update_ENVOUT_PWM()` | 30000 (`init_ENV_update_timer`) | 1 / 0 |
+| TIM4 | `dig_inouts.c` `debounce_trigger_inputs` (macro for `TIM4_IRQHandler`) | debounce of the Rotate and Lock jacks (`do_ROTUP`, `do_ROTDOWN`, `do_LOCK135`, `do_LOCK246`) | 32000 | 3 / 2 |
+| Main loop | `main.c` `main()` `while(1)` | everything in section 4.2 except `param_read_freq`, `update_motion`, `update_morph`, `param_read_q` | none: unthrottled | lowest (thread mode) |
+
+Checked by grep: `param_read_freq` and `update_motion` have exactly one caller, the TIM10 handler
+(`params.c`). `update_morph` has one caller, `filter.c` (per sample). `param_read_q` is called once per
+block from `filter.c`. `update_spread`, `read_spread`, `process_rotateCV`, `process_scaleCV`,
+`param_read_switches` are called only from the `main.c` loop. `NVIC_PriorityGroup_2` (`main.c`) gives
+priorities 0 to 3, so the audio block cannot be interrupted by any of the others. **This corrects
+M1-t**, which said `param_read_freq` runs in the main loop.
+
+Boot order in `main()`: `set_default_param_values`, `I2S_Block_PlayRec` (audio starts), then
+`init_freq_lpf`, `init_freq_update_timer`, `init_ENV_update_timer`, then the loop. Before the first
+TIM10 tick, `freq_shift[]` is 0 and `freq_nudge[2..5]` is 0 (`set_default_param_values`, `params.c`
+initialisers), which would make `c1` zero in `process_audio_block`.
+
+### 11.2 Rates (derived, nothing measured)
+- Clock tree (`system_stm32f4xx.c`): `PLL_M` 8, `PLL_N` 336, `PLL_P` 2, HSE 8 MHz (`stm32f4xx.h`
+  default, no override in the `Makefile`), so SYSCLK 168 MHz; `HPRE_DIV1`, `PPRE2_DIV2`, `PPRE1_DIV4`.
+- Timer clocks: 168 MHz for TIM9 and TIM10 (APB2), 84 MHz for TIM4 (APB1). This uses the ST rule
+  "timer clock is 2 x PCLK when the APB prescaler is not 1". That rule is in ST's reference manual,
+  not in this repo, and I have not read it this session. The code comments agree with it for TIM10
+  (`params.c`: "168MHz / (Period+1)"), TIM9 (`envout_pwm.c`: "168MHz / 30000") and TIM3
+  (`envout_pwm.c`: "168M / 2 / 4096"). The TIM4 comments (`dig_inouts.c`: 16000 is 5.5 kHz,
+  0.17778 ms) fit a 90 MHz timer clock, which matches the commented-out `PLL_N 360` (180 MHz) line in
+  `system_stm32f4xx.c`; they are stale.
+- Update period is register value + 1 counts (ST rule, same caveat; `params.c` says the same for TIM10).
+
+| Source | Counts per update | Rate | Per audio block at exactly 96 kHz |
+|---|---|---|---|
+| TIM10 | 8196 at 168 MHz | 20,497.8 Hz | 28000/8196 = 7000/2049 = 3.4163 |
+| TIM9 | 30001 at 168 MHz | 5,599.8 Hz | 28000/30001 = 0.9333 |
+| TIM4 | 32001 at 84 MHz | 2,624.9 Hz | 14000/32001 = 0.4375 |
+| Audio block | 16 frames | 6000 /s | 1 (= 28000 counts at 168 MHz) |
+
+The audio rate is not exactly 96 kHz. `system_stm32f4xx.c` sets `PLLI2S_N` 344, `PLLI2S_R` 2, I2S source
+PLLI2S, so I2SCLK = 8/8 x 344 / 2 = 172 MHz. `I2S_Init` in `stm32/periph/src/stm32f4xx_spi.c` (MCLK
+output enabled, `codec.c` `Codec_AudioInterface_Init`; `I2S_EXTERNAL_CLOCK_VAL` is commented out in
+`stm32f4xx_conf.h`, so the PLLI2S branch is used) computes `tmp = (172e6/256)*10/96000 + 5` in integers = 74, then
+divider 7 (`i2sdiv` 3, `i2sodd` 1). Fs = 172e6 / (256 x 7) = **95,982.14 Hz** (the 256 x divider
+formula is from ST's manual, not read here). That is 0.019 % below 96,000, or 0.32 cent flat against
+the coefficient tables (all generated for 96000: first line of each `filter_coefs/*.h` says `// 96000`).
+See M2-b in `open-questions.md`.
+
+### 11.3 Design
+All time in the core is counted in firmware time, never in host time.
+
+- One call to the core processes exactly one block: 16 frames at the core rate (`processBlock`).
+- After each block the scheduler adds the counts that block lasted to one accumulator per source and
+  runs every tick that fell due, in this fixed order: TIM9 ticks, TIM10 ticks, main-loop iterations.
+  The three are independent (`update_ENVOUT_PWM` reads `channel_level`, `ENVOUT_preload`,
+  `envspeed_*`, which `param_read_freq` and `update_motion` do not write), so the order between TIM9
+  and TIM10 does not matter; both run before the main loop because they preempt it.
+- Ticks run between blocks, never inside one. This matches the firmware: the audio ISR has the
+  highest priority.
+- Exact integer arithmetic, no floating-point drift. Core rate is a rational `Fs = num/den`
+  (96000/1 nominal; 671875/7 for the derived 95,982.14). Counts per block at 168 MHz =
+  2,688,000,000 x den / num. Each source with period P counts keeps `acc` in units of 1/num counts:
+  `acc += 2,688,000,000 * den`; `while (acc >= P * num) { acc -= P * num; run_tick(); }`. All values
+  fit in 64-bit integers. At nominal 96 kHz TIM10 runs 7000 ticks in every 2049 blocks.
+- Main-loop iterations use the same accumulator with P = 1/loop_rate. **The source gives no loop
+  rate.** Placeholder 12,000 iterations/s, read from one comment: `params.c` "CLEAR COARSE TUNING ...
+  (~3s)" next to `lock_down[] > 36000`. That is the author's estimate, not a measurement (M2-c).
+- `reset()` mirrors `main()`: defaults, tables, `init_freq_lpf`, `spread = (adc >> 8) + 1`
+  (`main.c`), then one TIM10 tick and one loop iteration before block 0. In the firmware the first
+  TIM10 timer starts a few instructions after audio starts, so the first TIM10 tick very likely
+  precedes the first block (derived from `main()` order, not measured). This answers M1-t for
+  `freq_shift` and `freq_nudge`: no block ever sees them at zero. See M2-d.
+- Single thread. The firmware races (main loop vs TIM10 on `motion_*`, `note[]`) become a fixed order.
+  All core calls come from the audio thread; the plugin copies parameters in between blocks.
+
+### 11.4 Not modelled (each needs a capture to settle)
+- Coalescing. The audio block takes about 78 us (static) or 104 us (morphing) of every 166.7 us
+  (`filter.c` comment at `process_audio_block`). TIM10 fires every 48.8 us, so up to two TIM10
+  updates can arrive during one block and merge into one pending interrupt. The real TIM10 rate
+  under load is therefore below 20.5 kHz by an amount that depends on handler run time, which the
+  source does not give (M2-e).
+- Jitter of tick position inside the 166.7 us gap.
+
+### 11.5 What depends on tick rates
+- Freq jack smoothing: 40-tap moving average per tick (`params.c` `init_freq_lpf`, `lpf.c`
+  `apply_fir_lpf`), 1.95 ms nominal, then bracket of 2 counts (`apply_bracket`).
+- `update_motion`: starts a morph or spread; timing error under 50 us.
+- Env Out followers (`update_ENVOUT_PWM`): time constant 1/(1-a) ticks: Fast attack 0.9990 is 1000
+  ticks (0.179 s), Fast decay 0.9991 is 1111 (0.198 s), Slow attack 0.9995 is 2000 (0.357 s), Slow
+  decay 0.9999 is 10000 (1.79 s), all at 5599.8 Hz. Trigger hold 285 ticks is 50.9 ms (comment
+  says about 100 ms; M1-j).
+- Main loop: `process_scaleCV` low-pass 0.99 per iteration (time constant 100 iterations),
+  `read_spread`, `process_rotateCV`. Hold timers (`lock_down`, `ROTARY_BUTTON_HOLD`) count
+  iterations; they belong to Milestone 7.
+
+## 12. Sample-rate handling (Milestone 2 design, not yet implemented)
+
+### 12.1 Why the core stays at 96 kHz
+Everything numeric is tied to 96 kHz: the coefficient tables (`// 96000`), the decay constants
+(`filter.c`: "c0 = 1 - 2/(decay * samplerate)"), the empirical amplitude and two-pass calibration
+terms (`twopass_calibration.h`, `filter.c` `ratio_b`), the 16-sample block, and the timers above.
+`globals.h` defines `SAMPLERATE 96000` with a comment that other values are for debugging only. Running
+the core at another rate would change pitch, decay time and level. So the core is fixed and the host
+rate is converted at the boundary. Core rate is one constant (`kCoreRate`, nominal 96000, see M2-b).
+
+### 12.2 Design
+- Host rate equals core rate (96000): no conversion; only the 16-frame block adapter. This path is
+  bit-exact and is the one used for the hardware comparisons in Milestones 3 and 5.
+- Otherwise: linear-phase polyphase FIR resampler, host to core on the way in and core to host on the
+  way out, in `src/host` (plain C++, no JUCE). Fixed latency, reported to the host (Milestone 5).
+- Block adapter: collects input frames until 16 are available, runs one core block, queues the
+  output. Fixed pre-roll of one block (16 core frames, 167 us) so the output never underruns; that
+  adds to the reported latency. Host buffer sizes of any length work (1 to thousands).
+- Rational ratios for exact polyphase: 44100 is 320/147, 48000 is 2/1, 88200 is 160/147, 176400 is
+  80/147, 192000 is 1/2, 32000 is 3/1, 22050 is 640/147. Other host rates and `kCoreRate` =
+  95,982.14 need an arbitrary-ratio path (interpolated filter table). Milestone 2's offline
+  renderer supports only the exact list above and says so for other files; the real-time path in
+  Milestone 5 handles any rate.
+- Resampler quality targets (passband ripple, stopband attenuation, latency) are my design choices,
+  not firmware facts. They are set and measured in Milestone 5. In Milestone 2 the renderer's
+  resampler is for listening only.
+- The hardware's own converter response (WM8731 filters, M1-l) is a separate question and is not
+  emulated by this resampler.
+
+### 12.3 Sample scale at the core boundary
+The core takes and returns `int32_t` samples exactly as `process_audio_block` does: 24 significant
+bits left-justified in 32 (`INPUT_LED_CLIP_LEVEL` 0x58000000, `SLIDER_CLIP_LEVEL` 0x50000000, trigger
+level 0x02000000 all assume this). Filter state values are therefore of order 1e9. The conversion
+float to int32 and back is plugin-side (M1-n decides the volts mapping). The firmware's 16-bit-pair
+packing is transport and is not ported (M2-f).
+
+## 13. Milestone 2 scope and rules
+
+### 13.1 What is ported now
+| Ported (core, line-by-line from the firmware) | Inputs only, logic deferred | Not in the core |
+|---|---|---|
+| `process_audio_block`: Two-Pass MAXQ, One-Pass MAXQ, One-Pass BpRe, bank and history logic (M1-p as is), morph blend, level smoothing, accumulation | `lock[]`, `lock_pressed[]`, `lock_down[]`, `q_locked[]`, `freqblock` (set directly; button state machines are Milestone 7) | LEDs, flash, `system_mode.c` |
+| `param_read_q`, `param_read_freq` (both filter branches; LED-only statements omitted and marked), `param_read_switches`, `read_spread`, `process_rotateCV`, `process_scaleCV` | `ui_mode` fixed at PLAY | `rotary.c/.h` (GPLv3), codec, I2S, ADC, DMA |
+| `update_morph`, `update_motion`, `update_spread`, `rotate_up/down`, `change_scale_up/down`, `jump_*` | Rotate and Lock trigger jacks as direct calls | `process_lock_buttons`, `process_rotary_*`, edit modes, `user_scales.c` edit UI |
+| `update_ENVOUT_PWM`, `FreqCoef_to_PWMval` (`usat` becomes a clamp to 12 bits), `lpf.c` | switch states as booleans | `limiter.c`, `equal_pow_pan_padded.h` (unused) |
+| Tables, unmodified | `user_scalebank` default data (`user_scales.c` `DEFAULT_user_scalebank`) | noise source (M1-n) |
+
+One-Pass and BpRe are ported because they sit in the same function; whether the plugin exposes them
+is the open v5 scope question and is not decided here.
+
+### 13.2 Tables
+Upstream table headers are included verbatim from `third_party/SMR`, with no copies and no edits,
+inside a namespace in one core file (`filter_coefs/*.h`, `exp_4096.h`, `exp_1voct.h`, `log_4096.h`,
+`twopass_calibration.h` contain no `#include`, checked by grep). At start-up they are copied with
+`memcpy` into flat core-owned arrays: MAXQ 231 floats, BpRe 693 floats per table. This avoids indexing
+a `[231][3]` array past its first row through a `float *` (`filter.c` does that; the headers fill only
+the first 231 floats, M1 section 3.2). `twopass_calibration` is declared 3380 and has 3354
+initialisers (M1 section 8); the highest index used is 3025.
+
+### 13.3 Numeric rules
+1. Every floating-point literal gets an `f` suffix. The firmware builds with
+   `-fsingle-precision-constant` (`Makefile` `CFLAGS`), so each bare `0.003`, `1.4`, `10.0`, `4096.0`
+   there is a float; on a desktop it would silently be a double.
+2. `-ffp-contract=off` on every `src/core` and test target (Clang on arm64 may otherwise fuse
+   multiply-adds). A test checks the flag took effect (V3).
+3. `-O2`, no `-Ofast`, no fast-math. The firmware builds with `-Ofast` plus FMA-capable `fpv4-sp-d16`,
+   so bit-exact match with hardware is not promised (M1 section 8); tolerances come in Milestone 3.
+4. Same statement order and same float/int conversions as the C source, including the accumulation
+   `filtered_buffer[i] += f_blended * channel_level[j]` (int32 converted to float, added, truncated
+   back) and the channel order 0..5.
+5. Where the C is undefined, the port uses a defined behaviour and lists it in `docs/port-notes.md`:
+   float to int32 overflow (saturate, NaN gives 0; hardware overload behaviour still needs capture),
+   `c_hiq`/`c_loq` before first assignment (NULL in the firmware; port starts at bank 0 tables),
+   `usat`. Array indices checked against table sizes: `exp_4096` max index 3125, `twopass_calibration`
+   max 3025, BpRe `scale*63 + nudge_filter_num*3 + 2` max 692.
+6. No denormal flushing in the core. The firmware sources set only `CPACR` (FPU enable); I found no
+   `FPSCR` write. Denormal handling for the plugin is Milestone 5.
+
+### 13.4 Layout
+`src/core`: `Tables`, `Engine` (state, `reset`, `processBlock`, `runDueTicks`), `Filter`, `Params`,
+`Rotation`, `EnvOut`, `Lpf`, `Scheduler`. `src/host`: resampler and block adapter (offline use in M2).
+`tools/smr_render`: WAV in, WAV out, controls as command-line numbers in ADC counts. `tests/`.
+
+## 14. Milestone 2 verification plan (all in GitHub Actions) and decisions needed
+- V1 Differential test: the unmodified firmware files (`filter.c`, `params.c`, `rotation.c`, `lpf.c`,
+  `envout_pwm.c`) compiled on an Ubuntu runner with GCC and `-fsingle-precision-constant
+  -ffp-contract=off -O2`, hardware replaced by a shim in `tests/oracle/` (test code only, never in
+  `src/core`), compared bit for bit per block against the port over scripted stimulus (every bank,
+  Q, morph, rotate, spread, scale CV, levels, both filter modes). This is the only check that
+  the port matches the source. It is extra scope; say if you want it dropped.
+- V2 Invariants: no NaN or infinity and bounded output over 60 s of noise, silence, loud sine and
+  impulses, at default and at extreme controls, for all 20 banks in MAXQ and all 19 in BpRe.
+- V3 Fused multiply-add check: a fixed expression whose fused and unfused results differ.
+- V4 Cross-architecture: output hash of a fixed render on arm64 and on x86_64 (`arch -x86_64`,
+  reported as skipped if the runner cannot run it).
+- V5 Default resonator: impulse response of each default channel peaks within 1 % of the frequency
+  computed from the table (65.40, 73.41, 82.40, 97.99, 109.99, 130.80 Hz, section 9). This tests the
+  port against the table, not against hardware (Milestone 3).
+- V6 Renderer end to end on synthetic WAVs (mono and stereo; 44.1, 48, 96 kHz).
+
+Decisions needed before coding are listed as M2-a to M2-g in `open-questions.md`.

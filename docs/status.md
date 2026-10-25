@@ -17,21 +17,22 @@ Not tested: VST3 in any host (Logic loads AU only).
 Choices made (see docs/open-questions.md): JUCE 8.0.6, AU type effect (aufx), codes Ptdt/Smru,
 runner macos-15 (macos-14 retires 2 Nov 2026).
 
-## Milestone 1: Source audit. WRITTEN, waiting for your review
+## Milestone 1: Source audit. DONE (approved 2026-10-25)
 
-Delivered (no code changes, nothing built or run):
-- docs/architecture.md: timing domains, signal path, dependencies of filter.c, params.c,
-  rotation.c and the limiter/slew code, hardware-only inventory, keep/stub/drop table,
-  licence findings, numerical-fidelity notes.
-- docs/open-questions.md: Q6, Q7, Q8 answered; kickoff-pack list settled where the source
-  decides it; 20 manual-versus-source items (M1-a to M1-t) for you to decide.
+Bryn approved the keep/stub/drop list (architecture.md section 6) and decided to follow the source
+for every open item M1-a to M1-t. M1-m (output labelling): source mapping for now, Bryn chooses
+left/right later. Still undecided and not needed yet: Q1 to Q5 (licensing), v5 feature scope,
+Freq as MIDI or parameter.
 
-Key findings: `limiter.c` is never called (no limiter in v5.1.1); no `arm_*` function is called, so
-no CMSIS code is needed; `rotary.c/.h` is GPLv3 and hardware-only (stays out); stmlib is not used.
+## Milestone 2: Headless DSP core. DESIGN WRITTEN, waiting for your review (no code yet)
 
-Milestone 1 is done when you approve the plan and the keep/stub/drop list. Not approved yet.
+Written (docs only, nothing built or run):
+- architecture.md section 11 (tick scheduler), 12 (sample-rate handling), 13 (scope and numeric
+  rules), 14 (verification plan). Section 10 amended (scheduler to src/core, resampler to src/host).
+- open-questions.md: M1-t corrected; decisions M2-a to M2-g, each with a proposed default.
 
-## Next: Milestone 2, headless DSP core (after you approve Milestone 1)
+Coding starts after you approve or change M2-a to M2-g.
 
 Note: CI logs cannot be downloaded in Claude's session (HTTP 403). The workflow writes results as
-annotations (archs, minos, auval) so they can be read through the API.
+annotations (archs, minos, auval) so they can be read through the API. The Milestone 2 tests will
+do the same.

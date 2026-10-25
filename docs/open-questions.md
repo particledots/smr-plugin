@@ -100,7 +100,12 @@ Makefile uses it. Not needed.
 
 ## Milestone 1: manual versus source, and other findings for you to decide
 
-Each item says what the manual states, what the source does, and where. None are resolved.
+Each item says what the manual states, what the source does, and where.
+
+**Decided by Bryn, 2026-10-25: for every item M1-a to M1-t, follow the source.** M1-m (output
+labelling): follow the source mapping for now; Bryn will choose the left/right assignment later.
+Items that need a capture to check (M1-i, M1-j, M1-k, M1-l, M1-n) stay open for Milestone 3.
+Q1 to Q5 (licensing), v5 feature scope and Freq as MIDI or parameter are still undecided.
 
 - **M1-a Freq jack on locked channels.** Manual (Lock section, "impervious to ... the Freq Nudge knob or Freq jack"): a locked channel ignores the Freq Nudge
   knob and the Freq jack. Source: `params.c` `param_read_freq` applies `freq_shift[n]` (the Freq
@@ -154,7 +159,9 @@ Each item says what the manual states, what the source does, and where. None are
   `channel_num & 1` (`filter.c`). Kept as is.
 - **M1-t Startup values.** `freq_nudge` is initialised `{1.0,1.0}` for 2 of 6 elements and `freq_shift`
   defaults to 0 in `set_default_param_values`. What the first audio block sees depends on when the
-  main loop first runs `param_read_freq`. Needs a check against start-up behaviour.
+  first TIM10 tick runs `param_read_freq`. **Corrected in Milestone 2:** the earlier text said the
+  main loop runs `param_read_freq`; it does not. Its only caller is `TIM1_UP_TIM10_IRQHandler`
+  (`params.c`). See M2-d.
 
 ### Other points for your decision
 - Single-precision handling and tolerances (`-Ofast`, `-fsingle-precision-constant`): bit-exact is
@@ -175,3 +182,35 @@ Each item says what the manual states, what the source does, and where. None are
 - CI runner `macos-15`, not Beads' `macos-14`: GitHub retires `macos-14` on
   2 November 2026 and fails jobs in scheduled brownouts before then, including
   26 Oct 14:00-24:00 UTC and 29 and 30 Oct (github.blog changelog 2026-10-01).
+
+## Milestone 2 design: decisions needed before coding
+
+Full reasoning is in `docs/architecture.md` sections 11 to 14. Each item has a proposed default.
+
+- **M2-a Where the scheduler and sample-rate code live.** Section 10 of the audit gave both to
+  `src/plugin`. Proposed: tick scheduler in `src/core` (it is firmware timing), resampler and block
+  adapter in a new plain-C++ folder `src/host`, so the plugin and the offline renderer share them.
+  Alternative: keep both in `src/plugin`.
+- **M2-b Audio rate: 96,000 Hz or 95,982.14 Hz.** From `system_stm32f4xx.c` (`PLLI2S_N` 344,
+  `PLLI2S_R` 2) and `I2S_Init` in `stm32f4xx_spi.c`, the hardware I2S rate computes to 95,982.14 Hz,
+  0.019 % (0.32 cent) below the 96,000 the tables assume. Derived, not measured; the 256 x divider
+  formula is from ST's manual, not read here. Proposed default: core at the nominal 96,000, with
+  the rate as one constant so it can change later. Needs a capture to confirm what the unit does.
+- **M2-c Main-loop rate.** The source gives none. Proposed placeholder 12,000 iterations per second,
+  taken from one comment (`params.c`, `lock_down[] > 36000` is "~3s"). It only affects the Scale CV
+  smoothing (`process_scaleCV`, 0.99 per iteration), `read_spread` and `process_rotateCV`. Needs a
+  capture (Scale CV step response) to replace it.
+- **M2-d Start-up order.** Proposed: `reset()` runs one TIM10 tick and one main-loop iteration before
+  block 0, so no block sees `freq_shift` at 0 (the firmware's first TIM10 tick very likely precedes
+  its first block). Alternative: reproduce a first block with `c1` = 0.
+- **M2-e Tick coalescing and jitter are not modelled.** The audio block occupies about 78 to 104 us
+  of each 166.7 us, and TIM10 fires every 48.8 us, so some TIM10 updates merge. Effect: the Freq CV
+  moving average and the Env Out follower times are nominal, not measured. Needs a capture.
+- **M2-f Input unpack quirk (not ported).** `audio_util.c` `audio_convert_2x16_to_stereo24` adds the
+  low 16-bit half as a signed `int16_t`, so whenever that half's top bit is set the input sample is
+  65536 too low (up to 2^-15 of full scale, about -90 dB; derived). Whether the codec data makes this
+  happen depends on the I2S word layout. Proposed: do not port; the core takes already-unpacked
+  int32. Alternative: port it behind a switch for the Milestone 3 comparison.
+- **M2-g Verification scope.** V1 (the port compared bit for bit with the unmodified firmware source
+  on an Ubuntu runner) is extra work beyond the kickoff pack. Proposed: do it. It is the only check
+  that the port matches the source.
