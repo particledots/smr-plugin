@@ -215,3 +215,16 @@ Full reasoning is in `docs/architecture.md` sections 11 to 14.
 - **M2-g Verification scope.** V1 (the port compared bit for bit with the unmodified firmware source
   on an Ubuntu runner) is extra work beyond the kickoff pack. Proposed: do it. It is the only check
   that the port matches the source.
+
+## Found while porting (Milestone 2)
+
+- **P-5 Firmware reads past `twopass_calibration[3380]`.** `params.c` `param_read_q` smooths with
+  `poll_ctr * (goal - prev) / 15.0` and `poll_ctr` reaches 16, so `qval` overshoots the goal by 1/15 of a
+  jump. `filter.c` (two-pass) then uses `twopass_calibration[(uint32_t)(qval_b - 900)]` with
+  `qval_b = 1000 + (qc - 3900) * 15`. Any `qval` above about 4118 indexes past the array. Seen in the oracle
+  run as qval 4196 and 4203 after a Q lock was released from about 3700 towards 4075. What the hardware reads
+  there is not in the source. The port reads the last entry. Needs a capture if it matters.
+- **P-6 (M2-d as built).** `reset()` runs one main-loop pass, then one TIM10 tick, before block 0. The approved
+  text said the other order; the main loop has to run first because `freq_shift` is computed from values it sets.
+- **P-9 Switching filter type or mode is covered by V1 for only 588 blocks** (scenario 4), because that scenario
+  saturates the output afterwards. Not a known mismatch; a shorter comparison.
