@@ -225,6 +225,6 @@ Full reasoning is in `docs/architecture.md` sections 11 to 14.
   run as qval 4196 and 4203 after a Q lock was released from about 3700 towards 4075. What the hardware reads
   there is not in the source. The port reads the last entry. Needs a capture if it matters.
 - **P-6 (M2-d as built).** `reset()` runs one main-loop pass, then one TIM10 tick, before block 0. The approved
-  text said the other order; the main loop has to run first because `freq_shift` is computed from values it sets.
+  text (M2-d) lists the TIM10 tick first; the code does the loop pass first. Whether that order matters has not been checked.
 - **P-9 Switching filter type or mode is covered by V1 for only 588 blocks** (scenario 4), because that scenario
   saturates the output afterwards. Not a known mismatch; a shorter comparison.
