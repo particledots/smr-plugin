@@ -1,0 +1,63 @@
+Unofficial SMR - third-party licences
+=====================================
+
+Unofficial SMR is a community plugin. It is not an official product and is not
+endorsed by the original designer or manufacturer of the Spectral Multiband
+Resonator.
+
+
+1. Spectral Multiband Resonator (SMR) firmware
+----------------------------------------------
+
+The filter and signal-processing code in this plugin is derived from the open
+source SMR firmware, version 5.1.1 (source commit 79bc953bb4b9cf47614d317b4ba9fc9f615c43ea),
+released under the MIT licence:
+
+    The MIT License (MIT)
+
+    Copyright (c) 2015 Dan Green (danngreen1@gmail.com)
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+Individual source files (for example filter.c) also name Hugo Paris as an
+author and carry the same MIT permission notice. Copyright notices in any file
+that is ported into src/core must be kept with that file.
+
+The firmware repository's licence file also states that the SMR hardware design
+is under a separate Creative Commons licence. No hardware design files are used
+by this plugin.
+
+The full upstream licence file is kept verbatim in licenses/SMR-LICENSE.txt.
+
+Milestone 0 status: the pass-through plugin does NOT yet contain any firmware
+code. This notice is included from the start so it is never forgotten.
+
+
+2. JUCE
+-------
+
+The plugin is built with the JUCE framework, version 8.0.6. JUCE is dual
+licensed (AGPLv3, or the commercial JUCE 8 End User Licence Agreement); see the
+LICENSE.md file in the JUCE repository at tag 8.0.6 and
+https://juce.com/legal/juce-8-licence/ . Which route applies to this plugin
+is recorded in docs/open-questions.md and must be settled before any public
+release.
+
+JUCE bundles further components (for example the VST3 SDK and the Audio Unit
+SDK) under their own licences, listed in JUCE's LICENSE.md.

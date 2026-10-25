@@ -1,0 +1,10 @@
+build/
+dist/
+*.zip
+.DS_Store
+.vscode/
+.idea/
+# hardware recordings stay out of git (see kickoff pack)
+recordings/
+*.wav
+!tests/data/*.wav

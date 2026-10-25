@@ -1,0 +1,37 @@
+Unofficial SMR - install (Milestone 0 test build)
+
+This is an empty pass-through test. It does nothing to the sound.
+It is not an official product.
+
+Open the Terminal app (Applications > Utilities > Terminal). Copy and paste each
+block below, then press Return.
+
+1. Unpack (the download is a zip inside a zip):
+
+   cd ~/Downloads
+   rm -rf smr-unpack && mkdir smr-unpack
+   ditto -x -k Unofficial-SMR-macOS.zip smr-unpack
+   ditto -x -k smr-unpack/Unofficial-SMR.zip smr-unpack
+
+2. Clear the "downloaded from the internet" block:
+
+   xattr -dr com.apple.quarantine ~/Downloads/smr-unpack
+
+3. Copy the plugins in:
+
+   mkdir -p ~/Library/Audio/Plug-Ins/Components ~/Library/Audio/Plug-Ins/VST3
+   cp -R ~/Downloads/smr-unpack/Unofficial-SMR/*.component ~/Library/Audio/Plug-Ins/Components/
+   cp -R ~/Downloads/smr-unpack/Unofficial-SMR/*.vst3 ~/Library/Audio/Plug-Ins/VST3/
+
+4. Make macOS notice the new plugin:
+
+   killall -9 AudioComponentRegistrar
+
+   (If it prints "No matching processes", that is fine.)
+
+5. In Logic, open the Plug-in Manager and rescan. The plugin is listed under
+   manufacturer "particledots" as "Unofficial SMR".
+
+To remove it later:
+
+   rm -rf ~/Library/Audio/Plug-Ins/Components/"Unofficial SMR.component" ~/Library/Audio/Plug-Ins/VST3/"Unofficial SMR.vst3"

@@ -1,0 +1,122 @@
+name: Build plugin (macOS)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:      # adds a "Run workflow" button in the Actions tab
+
+env:
+  SMR_PINNED_COMMIT: 79bc953bb4b9cf47614d317b4ba9fc9f615c43ea
+
+jobs:
+  build-macos:
+    runs-on: macos-15     # Apple silicon runner (macos-14 is retired 2 Nov 2026)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Environment
+        run: |
+          sw_vers
+          xcodebuild -version
+          cmake --version | head -1
+          uname -m
+
+      - name: Check the firmware submodule is at the pinned commit
+        run: |
+          actual=$(git -C third_party/SMR rev-parse HEAD)
+          echo "third_party/SMR is at: $actual"
+          echo "pinned commit is:      $SMR_PINNED_COMMIT"
+          if [ "$actual" != "$SMR_PINNED_COMMIT" ]; then
+            echo "::error::third_party/SMR is not at the pinned commit"; exit 1
+          fi
+          echo "licence copy matches submodule LICENSE?"
+          cmp licenses/SMR-LICENSE.txt third_party/SMR/LICENSE && echo "yes, identical"
+
+      - name: Configure (universal, macOS 12.0 minimum)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+
+      - name: Build core test, then run it
+        run: |
+          # Failures are also written as annotations (shown on the run page).
+          cmake --build build --target core_test -j4 > build_log.txt 2>&1 || {
+            grep -E "error|Error" build_log.txt | head -8 | while IFS= read -r line; do echo "::error::BUILD: $line"; done
+            tail -5 build_log.txt; exit 1; }
+          ./build/core_test > test_log.txt 2>&1; code=$?
+          cat test_log.txt
+          grep -E "FAIL" test_log.txt | head -8 | while IFS= read -r line; do echo "::error::TEST: $line"; done
+          exit $code
+
+      - name: Build AU + VST3
+        run: |
+          cmake --build build --target SMR_AU SMR_VST3 -j4 > plugin_build_log.txt 2>&1 || {
+            grep -E "error|Error" plugin_build_log.txt | head -8 | while IFS= read -r line; do echo "::error::BUILD: $line"; done
+            tail -20 plugin_build_log.txt; exit 1; }
+          tail -5 plugin_build_log.txt
+          ls -la build/SMR_artefacts/Release/AU build/SMR_artefacts/Release/VST3
+
+      - name: Ad-hoc sign (lets Apple silicon load an unsigned build)
+        run: |
+          for b in build/SMR_artefacts/Release/AU/*.component build/SMR_artefacts/Release/VST3/*.vst3; do
+            codesign --force --deep -s - "$b"
+            codesign --verify --deep --strict --verbose=2 "$b"
+          done
+
+      - name: Package
+        run: |
+          mkdir -p dist/Unofficial-SMR
+          cp -R build/SMR_artefacts/Release/AU/*.component dist/Unofficial-SMR/
+          cp -R build/SMR_artefacts/Release/VST3/*.vst3 dist/Unofficial-SMR/
+          cp THIRD-PARTY-LICENSES.txt dist/Unofficial-SMR/
+          cp docs/INSTALL.txt dist/Unofficial-SMR/
+          cp -R licenses dist/Unofficial-SMR/
+          ls -la dist/Unofficial-SMR
+
+      - name: Inspect the build (architectures, minimum macOS, AU identity)
+        run: |
+          fail=0
+          {
+            echo "### Build inspection"
+            echo "Submodule pinned commit: \`$SMR_PINNED_COMMIT\` (checked above)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for b in dist/Unofficial-SMR/*.component dist/Unofficial-SMR/*.vst3; do
+            bin=$(ls "$b"/Contents/MacOS/* | head -1)
+            archs=$(lipo -archs "$bin")
+            echo "== $b"; echo "archs: $archs"
+            case "$archs" in *arm64*x86_64*|*x86_64*arm64*) ;; *) echo "::error::$b is not universal: $archs"; fail=1;; esac
+            for a in arm64 x86_64; do
+              lipo -thin $a "$bin" -output "/tmp/slice_$a"
+              minos=$(otool -l "/tmp/slice_$a" | grep -A4 -E "LC_BUILD_VERSION|LC_VERSION_MIN" | grep -E "minos|version" | head -1 | awk '{print $2}')
+              echo "  $a minos: $minos"
+              [ "$minos" = "12.0" ] || { echo "::error::$b slice $a minos is '$minos', expected 12.0"; fail=1; }
+            done
+            echo "- \`$(basename "$b")\`: archs \`$archs\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "== AU Info.plist"
+          plutil -p dist/Unofficial-SMR/*.component/Contents/Info.plist | grep -E -A12 "AudioComponents|CFBundleIdentifier|CFBundleName|LSMinimumSystemVersion"
+          exit $fail
+
+      - name: auval (informational only; does not fail the build)
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R dist/Unofficial-SMR/*.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 3
+          auval -a | grep -i -E "Ptdt|SMR" || echo "not listed by auval -a"
+          auval -v aufx Smru Ptdt
+
+      - name: Zip for download
+        run: |
+          cd dist
+          ditto -c -k --keepParent Unofficial-SMR ../Unofficial-SMR.zip
+          cd ..
+          ls -la Unofficial-SMR.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Unofficial-SMR-macOS
+          path: Unofficial-SMR.zip
