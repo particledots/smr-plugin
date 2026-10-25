@@ -183,9 +183,10 @@ Q1 to Q5 (licensing), v5 feature scope and Freq as MIDI or parameter are still u
   2 November 2026 and fails jobs in scheduled brownouts before then, including
   26 Oct 14:00-24:00 UTC and 29 and 30 Oct (github.blog changelog 2026-10-01).
 
-## Milestone 2 design: decisions needed before coding
+## Milestone 2 design: decisions
 
-Full reasoning is in `docs/architecture.md` sections 11 to 14. Each item has a proposed default.
+**Decided by Bryn, 2026-10-25: approve the proposed default for every item M2-a to M2-g.**
+Full reasoning is in `docs/architecture.md` sections 11 to 14.
 
 - **M2-a Where the scheduler and sample-rate code live.** Section 10 of the audit gave both to
   `src/plugin`. Proposed: tick scheduler in `src/core` (it is firmware timing), resampler and block

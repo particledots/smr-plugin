@@ -24,14 +24,14 @@ for every open item M1-a to M1-t. M1-m (output labelling): source mapping for no
 left/right later. Still undecided and not needed yet: Q1 to Q5 (licensing), v5 feature scope,
 Freq as MIDI or parameter.
 
-## Milestone 2: Headless DSP core. DESIGN WRITTEN, waiting for your review (no code yet)
+## Milestone 2: Headless DSP core. DESIGN APPROVED 2026-10-25, coding not started
 
 Written (docs only, nothing built or run):
 - architecture.md section 11 (tick scheduler), 12 (sample-rate handling), 13 (scope and numeric
   rules), 14 (verification plan). Section 10 amended (scheduler to src/core, resampler to src/host).
 - open-questions.md: M1-t corrected; decisions M2-a to M2-g, each with a proposed default.
 
-Coding starts after you approve or change M2-a to M2-g.
+Bryn approved the proposed default for M2-a to M2-g. Next: write the code (architecture.md sections 11 to 14), build and test in CI.
 
 Note: CI logs cannot be downloaded in Claude's session (HTTP 403). The workflow writes results as
 annotations (archs, minos, auval) so they can be read through the API. The Milestone 2 tests will
