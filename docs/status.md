@@ -44,9 +44,23 @@ Found on the way: a firmware out-of-range read, see open-questions.md P-5. Detai
 Bryn's renderer test, 2026-10-25:
 - Intel MacBook Pro, macOS 12.7.8: ran cleanly on a 326 s, 48 kHz file. Zero underruns, zero loop-guard trips.
   Defaults (Two-Pass MAXQ, bank 0, Q pot 2048): peak 1.003, 6,286,732 saturation events. Sounds like a resonant low-frequency boost, "like the real SMR on a fairly extreme setting" (by ear, no side-by-side).
-  With `--pot 0=1000` (lower Q): peak 1.001, 505,451 saturation events. So most of the clipping comes from the resonance, not from the placeholder level scale alone.
+  With `--pot 0=1000` (lower Q): peak 1.001, 505,451 saturation events. Bryn's impression is that the clipping comes from the resonance. Not confirmed: the input file's level was not recorded and the level scale (M1-n) is a placeholder, so a hot level scale cannot be ruled out until a hardware capture.
   The quieter-sliders render was not run (command typo).
 - M4 mac mini (Tahoe): NOT tested. Bryn chose to proceed to Milestone 3 without it. The gap stays open.
 - Real SMR comparison: not done (hardware not to hand). Fidelity against the hardware is unconfirmed.
 
 Note: CI logs cannot be downloaded in Claude's session (HTTP 403). The workflow writes results as annotations.
+
+## Milestone 3: Hardware reference. DEFERRED by Bryn, 2026-10-25 (not started, no code written)
+
+Bryn decided to move on to Milestone 4 and do the hardware capture later. The capture is needed before Milestone 5 (plugin DSP match) can be confirmed. Until then fidelity against the real SMR is unconfirmed.
+
+Agreed so far, for when the capture is done:
+- Recording happens on one Mac next to the SMR, with Bryn's Focusrite Scarlett 2i2 (3rd Gen). Line input max +22 dBu at minimum gain, line output max +15.5 dBu at 0 dBFS, up to 192 kHz (Focusrite product page; DC coupling not stated, so treat as AC coupled: no Env Out CV capture).
+- Cables: three 3.5 mm to 1/4" mono (Scarlett out to SMR in, SMR odds out and evens out to Scarlett inputs 1 and 2).
+- Recordings go to a GitHub release asset, not git; CI analyses them and writes annotations.
+- Starting tolerances (Claude's proposal, Bryn agreed to start there): centre frequency 1 cent after the M2-b offset, gain 0.5 dB, decay time 10%. To be revised after real data.
+- Tier A (audio only): noise source with nothing patched in, one slider at a time (output mapping M1-m), stepped sine levels against the clip LEDs (M1-n), Q at three knob positions, a high-frequency ring for 96,000 versus about 95,982 Hz (M2-b).
+- Tier B (needs a CV source Bryn has not identified): Env Out (DC-coupled input needed), Scale CV step, Q CV, locked-channel Freq jack, Freq jack step response.
+
+Placeholders that stay until the capture: output mapping (M1-m), level scale (M1-n), core rate constant (M2-b), main-loop rate (M2-c). Each is a single constant or mapping in the code.
