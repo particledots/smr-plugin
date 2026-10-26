@@ -41,6 +41,12 @@ Not confirmed: anything on real hardware. Output channel mapping (M1-m) and leve
 
 Found on the way: a firmware out-of-range read, see open-questions.md P-5. Details of every difference from the source: docs/port-notes.md.
 
-Next: Bryn runs the renderer on both Macs (docs/renderer-howto.txt) and reports.
+Bryn's renderer test, 2026-10-25:
+- Intel MacBook Pro, macOS 12.7.8: ran cleanly on a 326 s, 48 kHz file. Zero underruns, zero loop-guard trips.
+  Defaults (Two-Pass MAXQ, bank 0, Q pot 2048): peak 1.003, 6,286,732 saturation events. Sounds like a resonant low-frequency boost, "like the real SMR on a fairly extreme setting" (by ear, no side-by-side).
+  With `--pot 0=1000` (lower Q): peak 1.001, 505,451 saturation events. So most of the clipping comes from the resonance, not from the placeholder level scale alone.
+  The quieter-sliders render was not run (command typo).
+- M4 mac mini (Tahoe): NOT tested. Bryn chose to proceed to Milestone 3 without it. The gap stays open.
+- Real SMR comparison: not done (hardware not to hand). Fidelity against the hardware is unconfirmed.
 
 Note: CI logs cannot be downloaded in Claude's session (HTTP 403). The workflow writes results as annotations.
