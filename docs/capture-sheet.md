@@ -53,7 +53,9 @@ I have not checked Logic 11.2's exact menu names. If something below doesn't mat
 For the sweep passes you will import `smr_sig_sweep.wav` in the same way, on its own track, then mute the main one.
 
 ## E. The recording passes
-For each pass: set the panel, press Record from the very start of the project, wait for playback to finish and the tail to run out, press Stop. Then export the two recorded regions (section F). Use the file names exactly as shown.
+For each pass: set the panel, press Record from the very start of the project, wait for playback to finish and the tail to run out, press Stop. Do not trim or cut anything.
+
+Stop times (file length plus about 10 s for ringing to die away; the 10 s is a guess, longer is harmless): P0 40 s; P1 and P2 (sweep, 38 s) about 48 s; P3a, P3b, P3c, P4 and P5 (main, 105 s) about 115 s. Then export the two recorded regions (section F). Use the file names exactly as shown.
 
 Q positions: **Q min** = RES (Q) fully counter-clockwise. **Q mid** = pointing straight up. **Q max** = fully clockwise.
 
