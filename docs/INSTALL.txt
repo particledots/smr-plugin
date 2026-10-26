@@ -1,7 +1,6 @@
 Unofficial SMR - install (test build)
 
 This is an early test build. It is not an official product.
-It is not an official product.
 
 Open the Terminal app (Applications > Utilities > Terminal). Copy and paste each
 block below, then press Return.
