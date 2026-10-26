@@ -40,7 +40,7 @@ This follows the manual's "Getting started: your first patch" (page 4).
 
 Slider positions are set per pass below. "Up" means pushed all the way to the top.
 
-Take **photo 1** now: the whole panel, light ring and sliders clearly visible. I use it to identify the bank and scale you are on. Do not change the bank or scale yourself.
+Take **photo 1** now: the whole panel, light ring and sliders clearly visible, in Rotate mode. Then take **photo 1b** in Scale mode: tap the ROTATE knob once (do not turn it, do not hold it), photograph the ring (bottom six lights show each channel's bank, top arc shows scales), then tap ROTATE once more to return to Rotate mode before recording. Do not change the bank or scale yourself. Photos are a cross-check only: the bank, scale and notes are worked out from the recorded frequencies.
 
 ## D. Set up Logic (once)
 I have not checked Logic 11.2's exact menu names. If something below doesn't match what you see, tell me what you see.
