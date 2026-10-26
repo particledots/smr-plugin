@@ -35,6 +35,24 @@ namespace smr
         bool cvlag          = false;  // CVLAG         CV Slew switch
     };
 
+    // What the firmware keeps in one parameter bank: system_mode.c store_params_into_sram() and
+    // load_params_from_sram(). Knob and jack values are not part of it (they are physical in the hardware).
+    // The plugin saves this next to the host parameters (docs/open-questions.md M4-b).
+    struct Snapshot
+    {
+        uint8_t  filter_type = 1;      // FilterType (MAXQ = 1, BPRE = 0)
+        uint8_t  filter_mode = 2;      // FilterMode (TWOPASS = 2, ONEPASS = 3)
+        uint32_t freqblock = 0;
+        uint8_t  note[kNumChannels] = {};
+        uint8_t  scale[kNumChannels] = {};
+        uint8_t  scale_bank[kNumChannels] = {};
+        uint8_t  lock[kNumChannels] = {};
+        uint8_t  q_locked[kNumChannels] = {};
+        uint32_t qval[kNumChannels] = {};
+        float    freq_nudge[kNumChannels] = {};
+        uint8_t  hover_scale_bank = 0; // not stored by the firmware: load_params_from_sram() derives it (first unlocked channel's bank)
+    };
+
     // All firmware state. Public so the tests and the oracle comparison can read and set it.
     // Names follow the C source; the file that owns each is in the comment.
     struct EngineState
@@ -80,6 +98,7 @@ namespace smr
         uint8_t  note[kNumChannels] = {};
         uint8_t  scale[kNumChannels] = {};
         uint8_t  scale_bank[kNumChannels] = {};
+        uint8_t  hover_scale_bank = 0;      // params.c: the bank shown while ROTATE is held; applied to unlocked channels on release
 
         // user_scales.c
         float    user_scalebank[kMaxqTableSize] = {};
@@ -244,6 +263,22 @@ namespace smr
         void setLockPressed (int ch, bool v) noexcept  { if ((unsigned) ch < (unsigned) kNumChannels) lock_pressed[ch] = v ? 1 : 0; }
         void setLockDown (int ch, uint32_t n) noexcept { if ((unsigned) ch < (unsigned) kNumChannels) lock_down[ch] = n; }
         void setQLocked (int ch, bool v) noexcept      { if ((unsigned) ch < (unsigned) kNumChannels) q_locked[ch] = v ? 1 : 0; }
+
+        // Lock button released in PLAY mode (params.c process_lock_buttons, release branch): latching on sets
+        // lock[] and clears motion_spread_dir[]; latching off clears lock[] and q_locked[]. Does nothing if the
+        // channel is already in that state. The hold gestures (Q-lock, coarse tuning) are Milestone 7.
+        void setLockLatched (int ch, bool on) noexcept;
+
+        // The bank chosen with ROTATE held, applied on release (params.c process_rotary_button, ui_mode PLAY):
+        // every channel whose lock[] is not 1 gets the bank. Out-of-range values are ignored.
+        void setBank (int bank) noexcept;
+
+        // Parameter bank as in system_mode.c. loadSnapshot() returns false and changes nothing if any value is out
+        // of range (the firmware trusts its flash; a project file is not trusted). Otherwise it does what
+        // load_params_from_sram() does, including change_filter_type() (applied at the start of the next block),
+        // the 14-position limit on freqblock, qval_goal = qval, and the motion state reset.
+        Snapshot saveSnapshot() const noexcept;
+        bool loadSnapshot (const Snapshot& s) noexcept;
 
         Scheduler scheduler;
 

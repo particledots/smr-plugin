@@ -30,11 +30,11 @@ jobs:
         run: |
           cmake -S . -B build_linux -DSMR_CORE_ONLY=ON -DCMAKE_BUILD_TYPE=Release > cmake_log.txt 2>&1 || {
             tail -20 cmake_log.txt; grep -E "error|Error" cmake_log.txt | head -8 | cut -c1-400 | while IFS= read -r line; do echo "::error::CONFIGURE: $line"; done; exit 1; }
-          cmake --build build_linux --target port_driver gen_stimulus trace_diff smr_core_tests -j4 > build_log.txt 2>&1 || {
+          cmake --build build_linux --target port_driver gen_stimulus trace_diff smr_core_tests smr_param_tests -j4 > build_log.txt 2>&1 || {
             grep -E "error|Error" build_log.txt | head -15 | cut -c1-400 | while IFS= read -r line; do echo "::error::BUILD(port): $line"; done
             tail -30 build_log.txt; exit 1; }
           tail -3 build_log.txt
-          echo "::notice::BUILD(port) GCC ok: port_driver gen_stimulus trace_diff smr_core_tests"
+          echo "::notice::BUILD(port) GCC ok: port_driver gen_stimulus trace_diff smr_core_tests smr_param_tests"
 
       - name: Build the oracle (unmodified firmware files plus the test shim)
         run: |
@@ -114,6 +114,14 @@ jobs:
           grep -E "^PASS: V5" core_tests_log.txt | cut -c1-300 | while IFS= read -r line; do echo "::notice::TEST(linux) $line"; done
           exit $code
 
+      - name: Milestone 4 parameter, mapping and state tests with GCC on x86-64
+        run: |
+          ./build_linux/smr_param_tests > param_tests_log.txt 2>&1; code=$?
+          cat param_tests_log.txt
+          grep -E "^FAIL" param_tests_log.txt | head -15 | cut -c1-400 | while IFS= read -r line; do echo "::error::PARAM-TEST(linux): $line"; done
+          echo "::notice::PARAM-TEST(linux) $(grep -E '^(PASS|FAIL): [0-9]+ checks' param_tests_log.txt)"
+          exit $code
+
   # ---------------------------------------------------------------------------------------------------------
   # Milestone 2 on macOS: core tests, V4 (arm64 against x86-64), V6 (renderer end to end), renderer artifact.
   core-macos:
@@ -127,11 +135,11 @@ jobs:
         run: |
           cmake -S . -B build -DSMR_CORE_ONLY=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 > cmake_log.txt 2>&1 || {
             tail -20 cmake_log.txt; grep -E "error|Error" cmake_log.txt | head -8 | cut -c1-400 | while IFS= read -r line; do echo "::error::CONFIGURE: $line"; done; exit 1; }
-          cmake --build build --target smr_core_tests smr_render wav_tool -j4 > build_log.txt 2>&1 || {
+          cmake --build build --target smr_core_tests smr_param_tests smr_render wav_tool -j4 > build_log.txt 2>&1 || {
             grep -E "error|Error" build_log.txt | head -15 | cut -c1-400 | while IFS= read -r line; do echo "::error::BUILD(mac): $line"; done
             tail -30 build_log.txt; exit 1; }
           tail -3 build_log.txt
-          for b in smr_core_tests smr_render wav_tool; do echo "$b: $(lipo -archs build/$b)"; done
+          for b in smr_core_tests smr_param_tests smr_render wav_tool; do echo "$b: $(lipo -archs build/$b)"; done
           echo "::notice::BUILD(mac) ok: smr_core_tests smr_render wav_tool, archs $(lipo -archs build/smr_render)"
 
       - name: Core tests (arm64 native)
@@ -160,6 +168,22 @@ jobs:
           echo "arm64:  $h_arm"; echo "x86-64: $h_x86"
           if [ "$h_arm" = "$h_x86" ]; then echo "::notice::V4 PASS: identical fixed-render hash on arm64 and x86-64: $h_arm"
           else echo "::error::V4 FAIL: arm64 $h_arm, x86-64 $h_x86"; code=1; fi
+          exit $code
+
+      - name: Milestone 4 parameter tests (arm64 native, and x86-64 through Rosetta if available)
+        run: |
+          arch -arm64 ./build/smr_param_tests > param_arm64.txt 2>&1; code=$?
+          cat param_arm64.txt
+          grep -E "^FAIL" param_arm64.txt | head -15 | cut -c1-400 | while IFS= read -r line; do echo "::error::PARAM-TEST(arm64): $line"; done
+          echo "::notice::PARAM-TEST(arm64) $(grep -E '^(PASS|FAIL): [0-9]+ checks' param_arm64.txt)"
+          if arch -x86_64 /usr/bin/true 2>/dev/null; then
+            arch -x86_64 ./build/smr_param_tests > param_x86.txt 2>&1; c2=$?
+            grep -E "^FAIL" param_x86.txt | head -15 | cut -c1-400 | while IFS= read -r line; do echo "::error::PARAM-TEST(x86-64): $line"; done
+            echo "::notice::PARAM-TEST(x86-64) $(grep -E '^(PASS|FAIL): [0-9]+ checks' param_x86.txt)"
+            [ $c2 -eq 0 ] || code=1
+          else
+            echo "::warning::PARAM-TEST x86-64 SKIPPED: Rosetta not available"
+          fi
           exit $code
 
       - name: V6 renderer end to end (mono and stereo; 44.1, 48 and 96 kHz)
@@ -247,10 +271,20 @@ jobs:
           grep -E "FAIL" test_log.txt | head -8 | while IFS= read -r line; do echo "::error::TEST: $line"; done
           exit $code
 
+      - name: Build and run the Milestone 4 parameter tests (universal, arm64 native)
+        run: |
+          cmake --build build --target smr_param_tests -j4 > param_build_log.txt 2>&1 || {
+            grep -E "error|Error" param_build_log.txt | head -8 | while IFS= read -r line; do echo "::error::BUILD(param tests): $line"; done
+            tail -20 param_build_log.txt; exit 1; }
+          arch -arm64 ./build/smr_param_tests > param_log.txt 2>&1; code=$?
+          grep -E "^FAIL" param_log.txt | head -8 | while IFS= read -r line; do echo "::error::PARAM-TEST(plugin job): $line"; done
+          echo "::notice::PARAM-TEST(plugin job) $(grep -E '^(PASS|FAIL): [0-9]+ checks' param_log.txt)"
+          exit $code
+
       - name: Build AU + VST3
         run: |
           cmake --build build --target SMR_AU SMR_VST3 -j4 > plugin_build_log.txt 2>&1 || {
-            grep -E "error|Error" plugin_build_log.txt | head -8 | while IFS= read -r line; do echo "::error::BUILD: $line"; done
+            grep -E "error|Error" plugin_build_log.txt | head -12 | cut -c1-400 | while IFS= read -r line; do echo "::error::BUILD(plugin): $line"; done
             tail -20 plugin_build_log.txt; exit 1; }
           tail -5 plugin_build_log.txt
           ls -la build/SMR_artefacts/Release/AU build/SMR_artefacts/Release/VST3

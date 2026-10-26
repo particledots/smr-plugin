@@ -1,35 +1,256 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "StateCodec.h"
+
+namespace
+{
+    const juce::Identifier kEngineTag { "SMR_ENGINE" };
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout SmrAudioProcessor::createLayout()
+{
+    using namespace smr_plugin;
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+
+    for (int i = 0; i < kNumParams; ++i)
+    {
+        const ParamSpec& s = spec (i);
+        const juce::ParameterID pid { s.id, 1 };
+
+        switch (s.kind)
+        {
+            case Kind::Float:
+                layout.add (std::make_unique<juce::AudioParameterFloat> (
+                    pid, s.name, juce::NormalisableRange<float> (paramMin (i), paramMax (i)), paramDefault (i),
+                    juce::AudioParameterFloatAttributes().withStringFromValueFunction ([i] (float v, int) { return juce::String (formatValue (i, v)); })));
+                break;
+
+            case Kind::Bool:
+                layout.add (std::make_unique<juce::AudioParameterBool> (pid, s.name, paramDefault (i) >= 0.5f));
+                break;
+
+            case Kind::Choice:
+            {
+                juce::StringArray names;
+                for (int k = 0; k < s.numChoices; ++k) names.add (s.choices[k]);
+                layout.add (std::make_unique<juce::AudioParameterChoice> (pid, s.name, names, (int) paramDefault (i)));
+                break;
+            }
+        }
+    }
+    return layout;
+}
 
 SmrAudioProcessor::SmrAudioProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      apvts (*this, nullptr, "SMR", createLayout())
 {
+    for (int i = 0; i < smr_plugin::kNumParams; ++i)
+        raw[i] = apvts.getRawParameterValue (smr_plugin::spec (i).id);
 }
 
-void SmrAudioProcessor::prepareToPlay (double, int) {}
+void SmrAudioProcessor::readValues (float* values) const noexcept
+{
+    for (int i = 0; i < smr_plugin::kNumParams; ++i)
+        values[i] = raw[i]->load();
+}
+
+void SmrAudioProcessor::restart (const float* values, const smr::Snapshot* snapshot)
+{
+    smr::Engine& engine = adapter.engine();
+    engine.setControls (smr_plugin::ParamApplier::buildControls (values));   // sleep window of the Freq Nudge knobs centres here
+    adapter.reset();                                                          // Engine::reset() keeps these controls
+    if (snapshot != nullptr)
+        engine.loadSnapshot (*snapshot);                                      // false (and no change) if a value is out of range
+    applier.apply (engine, values, true);
+}
+
+void SmrAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+{
+    const int rate = (int) std::lround (sampleRate);
+    const int maxBlock = juce::jmax (1, samplesPerBlock);
+
+    // Only the exact host/core rate ratios of src/host/Resampler are supported (docs/architecture.md 12.2).
+    rateSupported = std::abs (sampleRate - (double) rate) < 0.5 && adapter.prepare (rate, maxBlock);
+    scratch.assign ((size_t) maxBlock, 0.0f);
+
+    hostRateStat.store (sampleRate);
+    rateSupportedStat.store (rateSupported);
+
+    if (! rateSupported)
+    {
+        setLatencySamples (0);
+        latencyStat.store (0);
+        return;
+    }
+
+    const int latency = (int) std::ceil (adapter.latencyHostFrames());
+    setLatencySamples (latency);
+    latencyStat.store (latency);
+
+    float values[smr_plugin::kNumParams];
+    readValues (values);
+
+    smr::Snapshot snap;
+    bool haveSnap = false;
+    {
+        const juce::SpinLock::ScopedLockType lock (stateLock);
+        if (pending.active)
+        {
+            snap = pending.snapshot;
+            haveSnap = pending.hasSnapshot;
+            pending.active = false;
+        }
+        else if (haveLatest)
+        {
+            snap = latest;      // the host re-prepared (new buffer size or rate): keep rotation, scale, bank and locks
+            haveSnap = true;
+        }
+    }
+    restart (values, haveSnap ? &snap : nullptr);
+}
 
 bool SmrAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     const auto& in  = layouts.getMainInputChannelSet();
     const auto& out = layouts.getMainOutputChannelSet();
 
-    // Milestone 0: mono->mono or stereo->stereo only.
-    return in == out && (in == juce::AudioChannelSet::mono() || in == juce::AudioChannelSet::stereo());
+    // Stereo in, stereo out. Mono in, mono or stereo out. A mono output carries both output slots summed, as the
+    // hardware does when only one OUT jack is patched (manual, Stereo/mono operation).
+    if (in == juce::AudioChannelSet::stereo()) return out == juce::AudioChannelSet::stereo();
+    if (in == juce::AudioChannelSet::mono())   return out == juce::AudioChannelSet::mono() || out == juce::AudioChannelSet::stereo();
+    return false;
 }
 
 void SmrAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
-    // In place: the host gives one buffer for input and output. The core copies only if pointers differ.
-    const int numChannels = juce::jmin (getTotalNumInputChannels(), getTotalNumOutputChannels());
-    const float* const* readPtrs = buffer.getArrayOfReadPointers();
-    float* const* writePtrs = buffer.getArrayOfWritePointers();
+    // Flush denormals on this thread: a plugin-side choice with no firmware equivalent (docs/open-questions.md M4-e).
+    juce::ScopedNoDenormals noDenormals;
 
-    core.process (readPtrs, writePtrs, numChannels, buffer.getNumSamples());
+    const int n = buffer.getNumSamples();
+    const int nIn = getTotalNumInputChannels();
+    const int nOut = getTotalNumOutputChannels();
+    if (n <= 0 || nOut < 1) return;
 
-    for (int ch = numChannels; ch < getTotalNumOutputChannels(); ++ch)
-        buffer.clear (ch, 0, buffer.getNumSamples());
+    if (! rateSupported)
+    {
+        // Unsupported host rate: pass the audio through unchanged (the editor says so).
+        if (nIn == 1 && nOut > 1)
+            for (int ch = 1; ch < nOut; ++ch) buffer.copyFrom (ch, 0, buffer, 0, 0, n);
+        return;
+    }
+
+    float values[smr_plugin::kNumParams];
+    readValues (values);
+
+    // A project was loaded (or a state change arrived) since the last block.
+    smr::Snapshot snap;
+    bool restartNow = false, haveSnap = false;
+    {
+        const juce::SpinLock::ScopedTryLockType lock (stateLock);
+        if (lock.isLocked() && pending.active)
+        {
+            snap = pending.snapshot;
+            haveSnap = pending.hasSnapshot;
+            pending.active = false;
+            restartNow = true;
+        }
+    }
+    if (restartNow)
+        restart (values, haveSnap ? &snap : nullptr);
+
+    smr::Engine& engine = adapter.engine();
+    applier.apply (engine, values);
+
+    float* ch0 = buffer.getWritePointer (0);
+    float* ch1 = nOut > 1 ? buffer.getWritePointer (1) : nullptr;
+    const float* in1 = nIn > 1 ? buffer.getReadPointer (1) : nullptr;   // null: mono input, copied to both input slots
+
+    const int chunk = (int) scratch.size();
+    for (int off = 0; off < n; off += chunk)
+    {
+        const int m = juce::jmin (chunk, n - off);
+        float* outR = ch1 != nullptr ? ch1 + off : scratch.data();
+        adapter.process (ch0 + off, in1 != nullptr ? in1 + off : nullptr, ch0 + off, outR, m);
+
+        if (ch1 == nullptr)
+            for (int k = 0; k < m; ++k) ch0[off + k] += scratch[(size_t) k];
+    }
+
+    for (int ch = 2; ch < nOut; ++ch)
+        buffer.clear (ch, 0, n);
+
+    {
+        const juce::SpinLock::ScopedTryLockType lock (stateLock);
+        if (lock.isLocked())
+        {
+            latest = engine.saveSnapshot();
+            haveLatest = true;
+        }
+    }
+    underrunStat.store (adapter.underruns());
+}
+
+void SmrAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
+{
+    juce::ValueTree state = apvts.copyState();
+
+    smr::Snapshot snap;
+    bool have = false;
+    {
+        const juce::SpinLock::ScopedLockType lock (stateLock);
+        if (pending.active) { snap = pending.snapshot; have = pending.hasSnapshot; }
+        else if (haveLatest) { snap = latest; have = true; }
+    }
+    if (have)
+    {
+        juce::ValueTree eng (kEngineTag);
+        eng.setProperty ("version", smr_plugin::kStateVersion, nullptr);
+        eng.setProperty ("data", juce::String (smr_plugin::encodeSnapshot (snap)), nullptr);
+        state.appendChild (eng, nullptr);
+    }
+
+    if (auto xml = state.createXml())
+        copyXmlToBinary (*xml, destData);
+}
+
+void SmrAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+{
+    auto xml = getXmlFromBinary (data, sizeInBytes);
+    if (xml == nullptr || ! xml->hasTagName (apvts.state.getType()))
+        return;
+
+    juce::ValueTree tree = juce::ValueTree::fromXml (*xml);
+
+    smr::Snapshot snap;
+    bool have = false;
+    juce::ValueTree eng = tree.getChildWithName (kEngineTag);
+    if (eng.isValid())
+    {
+        have = (int) eng["version"] == smr_plugin::kStateVersion
+               && smr_plugin::decodeSnapshot (eng["data"].toString().toStdString(), snap);
+        tree.removeChild (eng, nullptr);
+    }
+
+    apvts.replaceState (tree);
+
+    // The audio thread (or prepareToPlay) applies it: the core is single threaded by design.
+    const juce::SpinLock::ScopedLockType lock (stateLock);
+    pending.active = true;
+    pending.hasSnapshot = have;
+    pending.snapshot = snap;
+}
+
+SmrAudioProcessor::Status SmrAudioProcessor::status() const
+{
+    Status s;
+    s.hostRate = hostRateStat.load();
+    s.rateSupported = rateSupportedStat.load();
+    s.latencySamples = latencyStat.load();
+    s.underruns = underrunStat.load();
+    return s;
 }
 
 juce::AudioProcessorEditor* SmrAudioProcessor::createEditor()

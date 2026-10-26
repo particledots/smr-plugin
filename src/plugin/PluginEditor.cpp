@@ -1,19 +1,35 @@
 #include "PluginEditor.h"
 
 SmrAudioProcessorEditor::SmrAudioProcessorEditor (SmrAudioProcessor& p)
-    : AudioProcessorEditor (&p)
+    : AudioProcessorEditor (&p), proc (p), generic (p)
 {
-    setSize (420, 160);
+    addAndMakeVisible (generic);
+    statusLabel.setJustificationType (juce::Justification::centredLeft);
+    statusLabel.setColour (juce::Label::backgroundColourId, juce::Colour (0xff1c1c1e));
+    statusLabel.setColour (juce::Label::textColourId, juce::Colours::white);
+    addAndMakeVisible (statusLabel);
+    setSize (520, 640);
+    setResizable (true, true);
+    timerCallback();
+    startTimerHz (4);
 }
 
-void SmrAudioProcessorEditor::paint (juce::Graphics& g)
+SmrAudioProcessorEditor::~SmrAudioProcessorEditor() { stopTimer(); }
+
+void SmrAudioProcessorEditor::resized()
 {
-    g.fillAll (juce::Colour (0xff1c1c1e));
-    g.setColour (juce::Colours::white);
-    g.setFont (20.0f);
-    g.drawText ("Unofficial SMR", getLocalBounds().removeFromTop (90), juce::Justification::centredBottom);
-    g.setFont (14.0f);
-    g.setColour (juce::Colours::lightgrey);
-    g.drawText ("Milestone 0: empty pass-through. Audio is not changed.",
-                getLocalBounds().withTrimmedTop (95), juce::Justification::centredTop);
+    auto r = getLocalBounds();
+    statusLabel.setBounds (r.removeFromTop (44));
+    generic.setBounds (r);
+}
+
+void SmrAudioProcessorEditor::timerCallback()
+{
+    const auto s = proc.status();
+    juce::String t = "Unofficial SMR - Milestone 4: parameters wired to the core. GUI is Milestone 6.\n";
+    if (s.rateSupported)
+        t << "Host " << juce::String (s.hostRate, 0) << " Hz, latency " << s.latencySamples << " samples, underruns " << (juce::int64) s.underruns;
+    else
+        t << "Host rate " << juce::String (s.hostRate, 0) << " Hz is not supported: audio passes through unchanged.";
+    statusLabel.setText (t, juce::dontSendNotification);
 }

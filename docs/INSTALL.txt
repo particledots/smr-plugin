@@ -1,6 +1,6 @@
-Unofficial SMR - install (Milestone 0 test build)
+Unofficial SMR - install (test build)
 
-This is an empty pass-through test. It does nothing to the sound.
+This is an early test build. It is not an official product.
 It is not an official product.
 
 Open the Terminal app (Applications > Utilities > Terminal). Copy and paste each

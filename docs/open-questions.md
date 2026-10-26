@@ -228,3 +228,20 @@ Full reasoning is in `docs/architecture.md` sections 11 to 14.
   text (M2-d) lists the TIM10 tick first; the code does the loop pass first. Whether that order matters has not been checked.
 - **P-9 Switching filter type or mode is covered by V1 for only 588 blocks** (scenario 4), because that scenario
   saturates the output afterwards. Not a known mismatch; a shorter comparison.
+
+## Milestone 4 (parameter layer and audio wiring)
+
+Decisions Bryn approved: D1 wire the core into the plugin audio path in this version (changed from the proposed default); D2 Freq as pitch parameters in octaves, AU type stays `aufx`, MIDI deferred; D3 follow the source for the Freq Nudge power-up sleep; D4 add Filter Mode and Filter Type parameters (41 in total); D5 level-type parameters shown as percent of the ADC range, Freq in octaves.
+
+- **M4-a Parameter to ADC mapping.** Each parameter becomes a 12-bit ADC count (`unitToCounts`, 0..4095) and goes to the ADC index listed in the Controls struct. Relative controls keep the firmware rule: Scale CV is `adc/409` through the 0.99 LPF (`params.c` `process_scaleCV`), Rotate CV is `adc/205` with the +-100 count threshold (`process_rotateCV`). Displayed values for those two are the resulting steps, not volts. Not measured on hardware.
+- **M4-b Saved state.** Saved = all host parameters plus one `SMR_ENGINE` block (`Snapshot`, version 1) holding what the hardware keeps in `store_params_into_sram` (notes, scale, bank, locks, Q lock, Q, nudge, filter type/mode, freqblock). Lock parameters win over the saved lock flags after load. Order on load: controls, `Engine::reset()`, snapshot, initial apply, so the Freq Nudge sleep window (`sleep_range` 800, `first_run`) is centred on the loaded knob positions. A nudge saved high stays silent until moved more than 800 counts. Unconfirmed on hardware.
+- **M4-c Freq parameter.** Calibrated so the ratio is 2^octaves (trackcomp 1, trackoffset 0). Range about 9.8 octaves (table `exp_1voct[]`), the manual says 10. Resolution about 2.9 cents per count; worst measured end-to-end error 7.22 cents (headless test). The jack only raises pitch. Manual and source disagree slightly on range: not resolved.
+- **M4-d Envelope speed.** Fast / Trigger / Slow, default Slow. The M2 renderer defaulted to Trigger by omission. No audio effect found; Env Out is not exposed yet.
+- **M4-e Denormal flush.** `juce::ScopedNoDenormals` in `processBlock` is a plugin-only deviation (no firmware equivalent). One line to remove; revisit in M5.
+- **M4-f Automation timing.** Host automation is applied once per host buffer, not sample accurate.
+- **M4-g Tail length.** 10 s reported to the host. Plugin choice, not from the firmware.
+- **M4-h Q CV.** A steady Q CV value moves Q by roughly one 5% step only, because the LPF steps only when the reading changes by more than 15 counts (see M1-k). Firmware behaviour, ported as is.
+- **M4-i Mono output.** Mono output sums both output slots (manual: with only EVENS OUT patched all six channels are heard). Mono input is copied to both input slots. Output slot mapping is still the provisional M1-m.
+- **M4-j Level CV default.** Level CV parameters default to 100% (assumes the jack is normalled high, which the manual does not state). M3 to confirm.
+- **M4-k Trigger parameters.** Rotate CW/CCW, Scale Up/Down act on the rising edge (off to on). In the generic editor, switch on, then off again. Not applied on load.
+- **M4-l Not in this milestone.** Env Out outputs, lock hold gestures, Q lock, coarse tuning, lock jacks, 1V/oct env mode, forbidden-notes UI (M7); user-scale editing is not ported.

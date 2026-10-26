@@ -6,7 +6,7 @@ if(APPLE)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "")
 endif()
 
-project(UnofficialSMR VERSION 0.0.1 LANGUAGES C CXX)
+project(UnofficialSMR VERSION 0.0.4 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,6 +20,7 @@ add_library(smr_core STATIC
   src/core/Lpf.cpp
   src/core/Tables.cpp
   src/core/Engine.cpp
+  src/core/Snapshot.cpp
   src/core/Filter.cpp
   src/core/Params.cpp
   src/core/Rotation.cpp
@@ -42,6 +43,15 @@ if(NOT MSVC)
 endif()
 set_target_properties(smr_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# --- src/plugin, JUCE-free part: the parameter table, its mapping to core inputs, and the saved-state encoding ---
+add_library(smr_params STATIC src/plugin/ParamMap.cpp src/plugin/StateCodec.cpp)
+target_include_directories(smr_params PUBLIC src/plugin)
+target_link_libraries(smr_params PUBLIC smr_core)
+if(NOT MSVC)
+  target_compile_options(smr_params PRIVATE -ffp-contract=off -O2)
+endif()
+set_target_properties(smr_params PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # --- Tests and tools (built on request, e.g. cmake --build build --target smr_render) ---
 # Same floating-point flags as the core, so the tests exercise the code as it is built.
 function(smr_test_target name)
@@ -56,6 +66,9 @@ target_link_libraries(core_test PRIVATE smr_core)
 
 smr_test_target(smr_core_tests tests/core_tests.cpp)                 # V2, V3, V5, scheduler, adapter, resampler, V4 hash
 target_link_libraries(smr_core_tests PRIVATE smr_host smr_core)
+
+smr_test_target(smr_param_tests tests/param_tests.cpp)               # Milestone 4: parameters, mapping, snapshot
+target_link_libraries(smr_param_tests PRIVATE smr_params smr_host smr_core)
 
 smr_test_target(port_driver tests/oracle/port_driver.cpp)            # V1: the port side of the differential test
 target_link_libraries(port_driver PRIVATE smr_core)
@@ -106,6 +119,8 @@ target_compile_definitions(SMR PRIVATE
   JUCE_USE_CURL=0
   JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(SMR PRIVATE
+  smr_params
+  smr_host
   smr_core
   juce::juce_audio_utils
   juce::juce_recommended_config_flags
