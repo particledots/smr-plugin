@@ -75,7 +75,7 @@ Not confirmed until CI is green and Bryn has run docs/testing-milestone-4.md on 
 ### Milestone 4 test result (Bryn, 2026-10-26, both Macs, docs/testing-milestone-4.md)
 - A loads, B all 41 parameters visible, D automation, E triggers, F locks and bank, G save and reopen, H mono track, J buffer-size change: all as expected, no problems reported.
 - C: audible effect, bands audible, no distortion, no crackle, CPU 5% or less (rough reading, one instance), sound rings out for less than a few seconds (decay depends on Q; the 10 s figure is only the tail length reported to the host).
-- I: status line latency 34 samples (which Mac and sample rate were not recorded).
+- I: status line latency 34 samples, both Macs at 48 kHz (Bryn, 2026-10-26).
 - Not recorded: run number installed, underruns count, results broken down per Mac. Treated as the same on both.
 - Not confirmed: fidelity to the real SMR (Milestone 3 deferred). "Sounds very much like the real SMR" is Bryn's ear on the Intel Mac, no side-by-side.
 Milestone 4: PASSED on both Macs.
