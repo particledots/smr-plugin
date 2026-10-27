@@ -286,11 +286,12 @@ jobs:
           cmake --build build --target smr_plugin_tests -j4 > plugtest_build_log.txt 2>&1 || {
             grep -E "error|Error" plugtest_build_log.txt | head -12 | cut -c1-400 | while IFS= read -r line; do echo "::error::BUILD(plugin tests): $line"; done
             tail -20 plugtest_build_log.txt; exit 1; }
-          bin=$(find build -name smr_plugin_tests -type f -perm -u+x | head -1)
-          echo "binary: $bin"; lipo -archs "$bin"
+          bin=$(find build -name smr_plugin_tests -type f | head -1)
+          [ -n "$bin" ] || { echo "::error::smr_plugin_tests binary not found"; exit 1; }
+          echo "binary: $bin"; echo "::notice::PLUGIN-TEST binary archs: $(lipo -archs "$bin")"
           fail=0
           for a in arm64 x86_64; do
-            arch -$a "$bin" selftest > plugtest_$a.txt 2>&1; code=$?
+            code=0; arch -$a "$bin" selftest > plugtest_$a.txt 2>&1 || code=$?
             [ $code -eq 0 ] || fail=1
             echo "::group::plugin tests $a (exit $code)"; cat plugtest_$a.txt; echo "::endgroup::"
             grep -E "^FAIL" plugtest_$a.txt | head -12 | cut -c1-600 | while IFS= read -r line; do echo "::error::PLUGIN-TEST($a): $line"; done
