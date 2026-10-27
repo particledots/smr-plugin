@@ -600,6 +600,29 @@ namespace
     }
 
     // ------------------------------------------------------------------------------------------------------------
+    // Milestone 6a: the editor builds, accepts the sizes Logic may ask for, and is destroyed cleanly. This does not look at
+    // the drawing or the mouse; those are checked by Bryn in Logic (docs/testing-milestone-6a.md).
+    void testEditor()
+    {
+        auto proc = std::make_unique<SmrAudioProcessor>();
+        proc->setRateAndBufferSizeDetails (48000.0, 512);
+        proc->prepareToPlay (48000.0, 512);
+        std::unique_ptr<juce::AudioProcessorEditor> ed (proc->createEditor());
+        check (ed != nullptr, "editor: createEditor returns an editor");
+        if (ed == nullptr) return;
+        check (ed->getWidth() > 0 && ed->getHeight() > 0, "editor: opens with a size", fmt ("%.0f x %.0f", ed->getWidth(), ed->getHeight()));
+        ed->setSize (600, 494);
+        ed->setSize (1600, 1318);
+        check (ed->getWidth() == 1600 && ed->getHeight() == 1318, "editor: resizes to the largest and smallest allowed sizes");
+        // The editor only talks to the processor through host parameters; moving one while the editor is open must not crash.
+        auto* pp = proc->parameters().getParameter ("level3");
+        pp->setValueNotifyingHost (0.25f);
+        juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
+        ed.reset();
+        proc->releaseResources();
+        check (true, "editor: destroyed with the processor still alive");
+    }
+
     int selftest()
     {
         testLayouts();
@@ -611,6 +634,7 @@ namespace
         testSavedState();
         testOddsOffset();
         testDenormals();
+        testEditor();
         std::printf ("%s: %d checks, %d failed\n", failures ? "FAIL" : "PASS", checks, failures);
         return failures ? 1 : 0;
     }

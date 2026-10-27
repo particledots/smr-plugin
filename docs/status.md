@@ -171,3 +171,10 @@ Not confirmed: the plugin in Logic on either Mac at this milestone; the hardware
 - Cause of the -42 dB: the core's output depends slightly on where the file starts relative to the core's clock (M5-g). Checked locally with a core-only `smr_render` (g++, not the CI binary): with 525 silent samples placed before the input file, the match to the Logic bounce is -101.4 dB (defaults) and -101.8 dB (Qmax) re signal, the 24-bit rounding level. Whole-sample offsets of 0 or 2000 give -42 and -36 dB. 525 is Logic's own start offset in this project; I did not find out why it is 525.
 - So for these two files the plugin in Logic equals the core's render to the 24-bit bounce limit. Not checked: 48 kHz, the Intel Mac, Logic 10.7.8, any control other than Q.
 Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; round 2 skipped. Installer now writes to /Library/Audio/Plug-Ins/Components (untested). Next: Milestone 6 (GUI v1).
+
+## Milestone 6: GUI v1. Started 2026-10-27 (6a code written, NOT yet confirmed)
+
+- Installer (`tools/install/Install-Unofficial-SMR.command`, build run 40519583006, commit d570345): Bryn used it on the M4 mac mini on 2026-10-27; the plugin then loaded in Logic. He did not record what macOS asked or the script's last line. Not tested on the Intel Mac.
+- Decisions: docs/open-questions.md "Milestone 6 decisions". Split into 6a (layout and controls) and 6b (displays).
+- 6a written: `src/plugin/PluginEditor.*` (sketch v3 layout, controls bound to the existing 41 parameters, nothing new), `src/plugin/SmrUi.h`, new check `testEditor` in `tests/plugin_tests.cpp`. `src/core`, `src/host` and the parameter table are not changed.
+- Not confirmed until CI is green and Bryn has run docs/testing-milestone-6a.md on both Macs: that the code builds, the window, every control, the trigger pulses (M6-c), resize in Logic 10.7.8.

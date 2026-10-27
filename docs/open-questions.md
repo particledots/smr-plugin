@@ -284,3 +284,30 @@ Host rate 96000 Hz against core rate 671875/7 Hz means the resampler grid shifts
 - M5-e: keep the denormal flush (`ScopedNoDenormals`).
 - Round 2 (Intel Mac, Logic 10.7.8, 48 kHz): skipped by Bryn. Logic on the Intel Mac is therefore not covered by a bounce comparison at this milestone; Milestone 4 loading tests on it stand.
 
+
+## Milestone 6 (GUI v1)
+
+### Milestone 6 decisions (Bryn, 2026-10-27)
+- Split: 6a is the layout of sketch v3 with every control bound to its existing parameter; 6b is the displays (light ring, slider LEDs with clip flash, Env Out indicators, In/Out meters, input clip LED). Each is tested by Bryn before the next starts.
+- Env speed switch has three positions (Fast, Trigger, Slow), as the `envspeed` parameter does; sketch v3 showed two.
+- Filter Type (MAXQ, BpRe) gets a dropdown next to Filter Mode ("Two-pass" in the sketch), drawn dashed as plugin-only.
+- Lock odds and Lock evens are dropped from v1. `params.c process_lock_jacks` flips the lock of channel 1 (and 3 and 5 when the switch is 135; channel 6, and 2 and 4 when it is 246) one channel at a time, which the Lock 1 to 6 buttons already reach. A jack trigger needs two new parameters (permanent ids, changes saved state). Revisit in Milestone 7 (lock logic).
+- Level CV 1 to 6, Res (Q) CV, Rotate CV and Scale CV stay out of the window. They stay host parameters and can be automated. Correction to my question of the same day: I listed the Freq jack parameters as missing from the sketch. They are in it (the "Freq" knobs under "Freq nudge"), so 6a draws them.
+
+### M6-a Scale selector (new, for Bryn)
+Sketch v3 shows a "Scale" dropdown. There is no scale parameter: the plugin has only the triggers Scale Up and Scale Down (`scaleup`, `scaledown`, ParamMap.cpp) and the Bank choice. 6a therefore has two dashed plugin-only buttons, "Scale" with a down triangle and "Scale" with an up triangle. A dropdown that picks scale 1 to 11 directly would need a new parameter. Your call.
+
+### M6-b Centre Rotate knob (new, for Bryn)
+The knob has no value of its own. Turning it fires the same two trigger parameters as the Rotate trig buttons: one step per 20 degrees of turn, or per mouse-wheel notch. The module's push action (tap toggles Scale mode, `params.c process_rotary_button`) has no parameter in the plugin (`ParamApplier::buildControls` keeps rotary_sw off), so it is not in the window. The "(scale)" caption under the knob in the sketch is dropped for that reason.
+
+### M6-c Trigger pulses (not tested)
+The plugin reads parameters once per host block and the core acts on the rising edge (`ParamApplier::apply`). The editor holds a trigger at 1 for 60 ms, then at 0 for 60 ms, and queues up to 8 further steps. A host block longer than about 60 ms (for example 4096 samples at 48 kHz is 85 ms) could miss a pulse. Nothing in CI tests this. Bryn's test sheet checks one click, a fast sequence of clicks, and a knob turn.
+
+### M6-d Colours (new)
+The thumb colours, lock-lit colour and the grey/white scheme are this project's own, from sketch v3. They are not from the firmware or the panel artwork. For 6b the ring and Env Out colours must come from `led_ring.c`; I have not read its colour tables yet, so none are drawn.
+
+### M6-e Window
+Drawn on a fixed 1000 x 824 canvas and scaled to the window. Opens at 900 x 742. Resizable from 600 x 494 to 1600 x 1318 with the aspect ratio fixed. Whether Logic 10.7.8 honours the resize limits is not known.
+
+### Q5 status
+Unchanged and still open. The 6a window is for Bryn's own testing only; nobody else gets a build until Q1 and Q5 are decided.
