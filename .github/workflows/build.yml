@@ -125,7 +125,7 @@ jobs:
   # ---------------------------------------------------------------------------------------------------------
   # Milestone 2 on macOS: core tests, V4 (arm64 against x86-64), V6 (renderer end to end), renderer artifact.
   core-macos:
-    runs-on: macos-15
+    runs-on: macos-26     # was macos-15; changed 2026-10-27 after three runs were cancelled with no macOS runner available
     steps:
       - uses: actions/checkout@v4
         with:
@@ -233,7 +233,7 @@ jobs:
           path: Unofficial-SMR-renderer.zip
 
   build-macos:
-    runs-on: macos-15     # Apple silicon runner (macos-14 is retired 2 Nov 2026)
+    runs-on: macos-26     # Apple silicon runner; was macos-15 (changed 2026-10-27, runner capacity); macos-14 is retired 2 Nov 2026
     steps:
       - uses: actions/checkout@v4
         with:
