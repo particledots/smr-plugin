@@ -154,7 +154,8 @@ namespace smrui
     class Pulser : private juce::Timer
     {
     public:
-        explicit Pulser (juce::RangedAudioParameter& p) : attach (p, [] (float) {}) {}
+        // sentCounter (optional): incremented every time the pulse goes high, for the window's trigger diagnostic.
+        explicit Pulser (juce::RangedAudioParameter& p, uint32_t* sentCounter = nullptr) : attach (p, [] (float) {}), sent (sentCounter) {}
         ~Pulser() override { stopTimer(); }
 
         void request()
@@ -186,12 +187,14 @@ namespace smrui
                 --pending;
                 attach.setValueAsCompleteGesture (1.0f);
                 high = true;
+                if (sent != nullptr) ++*sent;
             }
             else
                 stopTimer();
         }
 
         juce::ParameterAttachment attach;
+        uint32_t* sent;
         int pending = 0;
         bool high = false;
 
@@ -202,8 +205,8 @@ namespace smrui
     class PulseButton : public juce::Button
     {
     public:
-        PulseButton (const juce::String& text, juce::RangedAudioParameter& p, int glyphKind, bool dashedOutline)
-            : juce::Button (text), pulser (p), glyph (glyphKind), dashed (dashedOutline)
+        PulseButton (const juce::String& text, juce::RangedAudioParameter& p, int glyphKind, bool dashedOutline, uint32_t* sentCounter = nullptr)
+            : juce::Button (text), pulser (p, sentCounter), glyph (glyphKind), dashed (dashedOutline)
         {
             onClick = [this] { pulser.request(); };
         }
@@ -257,7 +260,8 @@ namespace smrui
     class RotateDial : public juce::Component
     {
     public:
-        RotateDial (juce::RangedAudioParameter& cw, juce::RangedAudioParameter& ccw) : pulseCw (cw), pulseCcw (ccw) {}
+        RotateDial (juce::RangedAudioParameter& cw, juce::RangedAudioParameter& ccw, uint32_t* sentCw = nullptr, uint32_t* sentCcw = nullptr)
+            : pulseCw (cw, sentCw), pulseCcw (ccw, sentCcw) {}
 
         void paint (juce::Graphics& g) override
         {

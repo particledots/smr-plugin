@@ -622,6 +622,37 @@ namespace
         check (true, "editor: destroyed with the processor still alive");
     }
 
+    // The trigger diagnostic shown in the window: the audio side counts rising edges of the four trigger parameters.
+    void testTriggerCounters()
+    {
+        auto proc = std::make_unique<SmrAudioProcessor>();
+        proc->setRateAndBufferSizeDetails (48000.0, 512);
+        proc->prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buf (2, 512);
+        juce::MidiBuffer midi;
+        auto runBlocks = [&] (int n) { for (int k = 0; k < n; ++k) { buf.clear(); proc->processBlock (buf, midi); } };
+        auto setp = [&] (const char* id, float v) { auto* pp = proc->parameters().getParameter (id); pp->setValueNotifyingHost (pp->convertTo0to1 (v)); };
+        runBlocks (2);
+        auto s0 = proc->status();
+        check (s0.trigSeen[0] == 0 && s0.trigSeen[1] == 0 && s0.trigSeen[2] == 0 && s0.trigSeen[3] == 0, "trigger counters: all zero at start");
+        for (int k = 0; k < 5; ++k)
+        {
+            setp ("rotatecw", 1.0f);  runBlocks (6);   // held for several blocks: one edge
+            setp ("rotatecw", 0.0f);  runBlocks (6);
+        }
+        for (int k = 0; k < 3; ++k)
+        {
+            setp ("rotateccw", 1.0f); runBlocks (6);
+            setp ("rotateccw", 0.0f); runBlocks (6);
+        }
+        setp ("scaleup", 1.0f);   runBlocks (6); setp ("scaleup", 0.0f);   runBlocks (2);
+        setp ("scaledown", 1.0f); runBlocks (6); setp ("scaledown", 0.0f); runBlocks (2);
+        const auto s = proc->status();
+        check (s.trigSeen[0] == 5 && s.trigSeen[1] == 3 && s.trigSeen[2] == 1 && s.trigSeen[3] == 1,
+               "trigger counters: 5 CW, 3 CCW, 1 scale up, 1 scale down pulses are counted once each",
+               fmt ("%.0f %.0f %.0f %.0f", s.trigSeen[0], s.trigSeen[1], s.trigSeen[2], s.trigSeen[3]));
+    }
+
     int selftest()
     {
         testLayouts();
@@ -634,6 +665,7 @@ namespace
         testOddsOffset();
         testDenormals();
         testEditor();
+        testTriggerCounters();
         std::printf ("%s: %d checks, %d failed\n", failures ? "FAIL" : "PASS", checks, failures);
         return failures ? 1 : 0;
     }

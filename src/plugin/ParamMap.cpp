@@ -240,10 +240,10 @@ namespace smr_plugin
                     if (! initial && changed) e.setBank (choiceIndex (v, i));
                     break;
 
-                case Role::RotateCw:  if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) e.triggerRotateUp(); break;
-                case Role::RotateCcw: if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) e.triggerRotateDown(); break;
-                case Role::ScaleUp:   if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) e.change_scale_up(); break;
-                case Role::ScaleDown: if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) e.change_scale_down(); break;
+                case Role::RotateCw:  if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) { e.triggerRotateUp();   ++edges_[0]; } break;
+                case Role::RotateCcw: if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) { e.triggerRotateDown(); ++edges_[1]; } break;
+                case Role::ScaleUp:   if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) { e.change_scale_up();    ++edges_[2]; } break;
+                case Role::ScaleDown: if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) { e.change_scale_down();  ++edges_[3]; } break;
 
                 default: break;
             }

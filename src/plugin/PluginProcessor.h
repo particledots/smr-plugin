@@ -47,6 +47,7 @@ public:
         bool rateSupported = false;
         int latencySamples = 0;
         uint64_t underruns = 0;
+        uint32_t trigSeen[4] = {};      // rising edges the audio side has seen: Rotate CW, Rotate CCW, Scale Up, Scale Down
     };
     Status status() const;
 
@@ -76,6 +77,7 @@ private:
     std::atomic<bool> rateSupportedStat { false };
     std::atomic<int> latencyStat { 0 };
     std::atomic<uint64_t> underrunStat { 0 };
+    std::atomic<uint32_t> trigSeenStat[4] = {};
     bool rateSupported = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SmrAudioProcessor)

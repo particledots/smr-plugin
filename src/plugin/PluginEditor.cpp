@@ -51,13 +51,13 @@ public:
         sw (envSwitch,    "envspeed",      3, false, 909, 429, 78);
 
         // Rotate: the two trigger buttons and the centre knob.
-        rotCcw = std::make_unique<smrui::PulseButton> ("Rotate trig", *apvts.getParameter ("rotateccw"), 1, false);
-        rotCw  = std::make_unique<smrui::PulseButton> ("Rotate trig", *apvts.getParameter ("rotatecw"), 2, false);
+        rotCcw = std::make_unique<smrui::PulseButton> ("Rotate trig", *apvts.getParameter ("rotateccw"), 1, false, &sent[1]);
+        rotCw  = std::make_unique<smrui::PulseButton> ("Rotate trig", *apvts.getParameter ("rotatecw"), 2, false, &sent[0]);
         rotCcw->setBounds (191, 547, 124, 32);
         rotCw->setBounds (685, 547, 124, 32);
         addAndMakeVisible (*rotCcw);
         addAndMakeVisible (*rotCw);
-        dial = std::make_unique<smrui::RotateDial> (*apvts.getParameter ("rotatecw"), *apvts.getParameter ("rotateccw"));
+        dial = std::make_unique<smrui::RotateDial> (*apvts.getParameter ("rotatecw"), *apvts.getParameter ("rotateccw"), &sent[0], &sent[1]);
         dial->setBounds (462, 586, 76, 76);
         addAndMakeVisible (*dial);
 
@@ -65,8 +65,8 @@ public:
         combo (filterMode, "filtermode", 176, 757, 100, 31);
         combo (filterType, "filtertype", 282, 757, 92, 31);
         combo (bank,       "bank",       380, 757, 112, 31);
-        scaleDown = std::make_unique<smrui::PulseButton> ("Scale", *apvts.getParameter ("scaledown"), 4, true);
-        scaleUp   = std::make_unique<smrui::PulseButton> ("Scale", *apvts.getParameter ("scaleup"), 3, true);
+        scaleDown = std::make_unique<smrui::PulseButton> ("Scale", *apvts.getParameter ("scaledown"), 4, true, &sent[3]);
+        scaleUp   = std::make_unique<smrui::PulseButton> ("Scale", *apvts.getParameter ("scaleup"), 3, true, &sent[2]);
         scaleDown->setBounds (500, 757, 64, 31);
         scaleUp->setBounds (568, 757, 64, 31);
         addAndMakeVisible (*scaleDown);
@@ -81,6 +81,20 @@ public:
         {
             statusText = s;
             repaint (430, 20, 540, 30);
+        }
+    }
+
+    // Temporary diagnostic for the trigger test (docs/open-questions.md M6-c): pulses sent by this window and rising edges seen by the audio side.
+    void setTriggerSeen (const uint32_t* seen)
+    {
+        juce::String t ("triggers sent/seen:   ");
+        static const char* const names[4] = { "Rot CW", "Rot CCW", "Scale up", "Scale down" };
+        for (int k = 0; k < 4; ++k)
+            t << (k ? "   " : "") << names[k] << " " << (juce::int64) sent[k] << "/" << (juce::int64) seen[k];
+        if (t != diagText)
+        {
+            diagText = t;
+            repaint (330, 46, 640, 24);
         }
     }
 
@@ -102,6 +116,9 @@ public:
         g.setColour (smrui::softInk());
         g.setFont (13.0f);
         g.drawText (statusText, juce::Rectangle<float> (430.0f, 24.0f, 535.0f, 22.0f), juce::Justification::centredRight, false);
+        g.setFont (12.0f);
+        g.drawText (diagText, juce::Rectangle<float> (330.0f, 48.0f, 635.0f, 18.0f), juce::Justification::centredRight, false);
+        g.setFont (13.0f);
 
         // Channel strips.
         for (int i = 0; i < 6; ++i)
@@ -202,7 +219,8 @@ private:
     }
 
     juce::AudioProcessorValueTreeState& apvts;
-    juce::String statusText, readout;
+    juce::String statusText, readout, diagText;
+    uint32_t sent[4] = {};
 
     juce::Slider levels[6], nudge[2], freq[2], qKnob, morph, spread;
     juce::ToggleButton locks[6];
@@ -258,4 +276,5 @@ void SmrAudioProcessorEditor::timerCallback()
     else
         t << "Host rate " << juce::String (s.hostRate, 0) << " Hz is not supported: audio passes through unchanged.";
     content->setStatus (t);
+    content->setTriggerSeen (s.trigSeen);
 }

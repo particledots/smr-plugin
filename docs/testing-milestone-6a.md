@@ -34,3 +34,10 @@ For each, say what happened. A one-word answer is fine.
 2. The line from step 2.2.
 3. Anything that did not match, with the step number.
 4. Anything hard to read or hard to hit with the mouse.
+
+
+## 6. Trigger counter test (added 2026-10-27; needs the build made after commit that adds the counter)
+The window has a second small line under the status line: "triggers sent/seen: Rot CW a/b   Rot CCW c/d ...". "sent" is how many pulses the window sent, "seen" is how many the audio side received.
+1. Install the new build (steps in section 1). Open the window and play audio.
+2. Click Rotate trig on the right 10 times at about 3 per second. Click Rotate trig on the left 10 times at the same pace.
+3. Type me the line exactly as shown.

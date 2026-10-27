@@ -72,7 +72,12 @@ namespace smr_plugin
         // channel's bank), and nothing fires.
         void apply (smr::Engine& engine, const float* values, bool initial = false);
 
+        // How many rising edges each trigger has had since this object was made (0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down).
+        // A diagnostic for the window (docs/open-questions.md M6-c); it does not affect the audio.
+        uint32_t triggerEdges (int which) const { return edges_[which & 3]; }
+
     private:
         float prev_[kNumParams] = {};
+        uint32_t edges_[4] = {};
     };
 }
