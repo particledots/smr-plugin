@@ -325,10 +325,17 @@ namespace
                   fmt ("first output sample above 1e-9 at index %.0f (impulse at 0)", onset));
         }
 
-        // A rate that is not in the exact-ratio list passes the audio through unchanged.
+        // A rate whose host/core ratio does not reduce to small integers (BlockAdapter::prepare, ratioToCore limit 30000) passes the
+        // audio through unchanged. 44101 Hz is such a rate (671875/(7*44101) does not reduce). 50000 Hz is not: it is 215/112.
+        {
+            TestProc p50;
+            p50.setRateAndBufferSizeDetails (50000.0, 256);
+            p50.prepareToPlay (50000.0, 256);
+            check (p50.status().rateSupported, "host rate 50000 Hz is supported (ratio 215/112)", fmt ("latency %.0f samples", (double) p50.getLatencySamples()));
+        }
         TestProc p;
-        p.setRateAndBufferSizeDetails (50000.0, 256);
-        p.prepareToPlay (50000.0, 256);
+        p.setRateAndBufferSizeDetails (44101.0, 256);
+        p.prepareToPlay (44101.0, 256);
         juce::AudioBuffer<float> buf (2, 256), orig (2, 256);
         Noise n (5);
         for (int c = 0; c < 2; ++c) for (int k = 0; k < 256; ++k) orig.setSample (c, k, 0.1f * n.next());
@@ -337,7 +344,8 @@ namespace
         p.processBlock (buf, midi);
         bool same = true;
         for (int c = 0; c < 2; ++c) for (int k = 0; k < 256; ++k) same = same && buf.getSample (c, k) == orig.getSample (c, k);
-        check (! p.status().rateSupported && same && p.getLatencySamples() == 0, "unsupported host rate 50000 Hz: audio unchanged, latency 0");
+        check (! p.status().rateSupported && same && p.getLatencySamples() == 0, "unsupported host rate 44101 Hz: audio unchanged, latency 0",
+               fmt ("rateSupported %.0f, unchanged %.0f, latency %.0f", (double) p.status().rateSupported, (double) same, (double) p.getLatencySamples()));
     }
 
     void testDefaults()
