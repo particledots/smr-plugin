@@ -51,6 +51,11 @@ public:
     };
     Status status() const;
 
+    // For the window's trigger buttons: how many rising and falling edges of each trigger parameter the audio side has seen
+    // (0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down). The window holds a trigger until the audio side has seen it.
+    uint32_t triggerRisingCount (int which) const noexcept  { return trigSeenStat[which & 3].load(); }
+    uint32_t triggerFallingCount (int which) const noexcept { return trigReleasedStat[which & 3].load(); }
+
     // Resonators ring after the input stops; hosts use this to keep rendering a bounce (docs/open-questions.md M4-g).
     static constexpr double kTailSeconds = 10.0;
 
@@ -78,6 +83,7 @@ private:
     std::atomic<int> latencyStat { 0 };
     std::atomic<uint64_t> underrunStat { 0 };
     std::atomic<uint32_t> trigSeenStat[4] = {};
+    std::atomic<uint32_t> trigReleasedStat[4] = {};
     bool rateSupported = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SmrAudioProcessor)

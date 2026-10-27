@@ -163,7 +163,11 @@ void SmrAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
 
     smr::Engine& engine = adapter.engine();
     applier.apply (engine, values);
-    for (int k = 0; k < 4; ++k) trigSeenStat[k].store (applier.triggerEdges (k));
+    for (int k = 0; k < 4; ++k)
+    {
+        trigSeenStat[k].store (applier.triggerEdges (k));
+        trigReleasedStat[k].store (applier.triggerReleases (k));
+    }
 
     float* ch0 = buffer.getWritePointer (0);
     float* ch1 = nOut > 1 ? buffer.getWritePointer (1) : nullptr;

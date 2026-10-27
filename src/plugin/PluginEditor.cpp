@@ -51,13 +51,13 @@ public:
         sw (envSwitch,    "envspeed",      3, false, 909, 429, 78);
 
         // Rotate: the two trigger buttons and the centre knob.
-        rotCcw = std::make_unique<smrui::PulseButton> ("Rotate trig", *apvts.getParameter ("rotateccw"), 1, false, &sent[1]);
-        rotCw  = std::make_unique<smrui::PulseButton> ("Rotate trig", *apvts.getParameter ("rotatecw"), 2, false, &sent[0]);
+        rotCcw = std::make_unique<smrui::PulseButton> ("Rotate trig", *apvts.getParameter ("rotateccw"), 1, false, linkFor (p, 1));
+        rotCw  = std::make_unique<smrui::PulseButton> ("Rotate trig", *apvts.getParameter ("rotatecw"), 2, false, linkFor (p, 0));
         rotCcw->setBounds (191, 547, 124, 32);
         rotCw->setBounds (685, 547, 124, 32);
         addAndMakeVisible (*rotCcw);
         addAndMakeVisible (*rotCw);
-        dial = std::make_unique<smrui::RotateDial> (*apvts.getParameter ("rotatecw"), *apvts.getParameter ("rotateccw"), &sent[0], &sent[1]);
+        dial = std::make_unique<smrui::RotateDial> (*apvts.getParameter ("rotatecw"), *apvts.getParameter ("rotateccw"), linkFor (p, 0), linkFor (p, 1));
         dial->setBounds (462, 586, 76, 76);
         addAndMakeVisible (*dial);
 
@@ -65,8 +65,8 @@ public:
         combo (filterMode, "filtermode", 176, 757, 100, 31);
         combo (filterType, "filtertype", 282, 757, 92, 31);
         combo (bank,       "bank",       380, 757, 112, 31);
-        scaleDown = std::make_unique<smrui::PulseButton> ("Scale", *apvts.getParameter ("scaledown"), 4, true, &sent[3]);
-        scaleUp   = std::make_unique<smrui::PulseButton> ("Scale", *apvts.getParameter ("scaleup"), 3, true, &sent[2]);
+        scaleDown = std::make_unique<smrui::PulseButton> ("Scale", *apvts.getParameter ("scaledown"), 4, true, linkFor (p, 3));
+        scaleUp   = std::make_unique<smrui::PulseButton> ("Scale", *apvts.getParameter ("scaleup"), 3, true, linkFor (p, 2));
         scaleDown->setBounds (500, 757, 64, 31);
         scaleUp->setBounds (568, 757, 64, 31);
         addAndMakeVisible (*scaleDown);
@@ -170,6 +170,16 @@ public:
     }
 
 private:
+    // Trigger k: 0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down. The processor outlives the editor.
+    smrui::TriggerLink linkFor (SmrAudioProcessor& p, int k)
+    {
+        smrui::TriggerLink l;
+        l.rising  = [&p, k] { return p.triggerRisingCount (k); };
+        l.falling = [&p, k] { return p.triggerFallingCount (k); };
+        l.sent = &sent[k];
+        return l;
+    }
+
     static void place (juce::Component& c, int cx, int cy, int w, int h) { c.setBounds (cx - w / 2, cy - h / 2, w, h); }
 
     static void label (juce::Graphics& g, const juce::String& t, float cx, float cy, float w)

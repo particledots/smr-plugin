@@ -651,6 +651,9 @@ namespace
         check (s.trigSeen[0] == 5 && s.trigSeen[1] == 3 && s.trigSeen[2] == 1 && s.trigSeen[3] == 1,
                "trigger counters: 5 CW, 3 CCW, 1 scale up, 1 scale down pulses are counted once each",
                fmt ("%.0f %.0f %.0f %.0f", s.trigSeen[0], s.trigSeen[1], s.trigSeen[2], s.trigSeen[3]));
+        check (proc->triggerRisingCount (0) == 5 && proc->triggerRisingCount (1) == 3 && proc->triggerRisingCount (2) == 1 && proc->triggerRisingCount (3) == 1
+               && proc->triggerFallingCount (0) == 5 && proc->triggerFallingCount (1) == 3 && proc->triggerFallingCount (2) == 1 && proc->triggerFallingCount (3) == 1,
+               "trigger counters: the window's accessors give the same rising counts and equal falling counts");
     }
 
     int selftest()

@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <functional>
+#include <utility>
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -148,55 +149,87 @@ namespace smrui
         juce::ParameterAttachment attach;
     };
 
-    // Fires a trigger parameter the way a patch cable would: the value goes to 1, stays there long enough for the audio
-    // side to see it (the processor reads parameters once per host block, and the core acts on the rising edge, see
-    // ParamMap.h ParamApplier::apply), then goes back to 0. Steps asked for while a pulse is running wait their turn.
+    // How a trigger button learns what the audio side has seen (see Pulser). sent: optional counter for the window's diagnostic line.
+    struct TriggerLink
+    {
+        std::function<uint32_t()> rising, falling;
+        uint32_t* sent = nullptr;
+    };
+
+    // Fires a trigger parameter the way a patch cable would, and makes sure the audio side saw it. The plugin reads parameters once
+    // per host block and the core acts on the rising edge (ParamMap.h ParamApplier::apply). A fixed 60 ms pulse was lost in Logic
+    // (Bryn's Intel Mac test, 2026-10-27: 10 sent, 6 and 8 seen; docs/open-questions.md M6-c), so this holds the value at 1 until the
+    // audio side has counted the rising edge, then sets 0 and waits until it has counted that too, then sends the next queued pulse.
+    // If the audio side does not answer within 3 s (for example the host is not processing audio), the pulse is dropped and so is
+    // the queue. Up to 8 pulses wait their turn.
     class Pulser : private juce::Timer
     {
     public:
-        // sentCounter (optional): incremented every time the pulse goes high, for the window's trigger diagnostic.
-        explicit Pulser (juce::RangedAudioParameter& p, uint32_t* sentCounter = nullptr) : attach (p, [] (float) {}), sent (sentCounter) {}
-        ~Pulser() override { stopTimer(); }
+        Pulser (juce::RangedAudioParameter& p, TriggerLink l) : attach (p, [] (float) {}), link (std::move (l)) {}
+
+        ~Pulser() override
+        {
+            stopTimer();
+            if (state == State::WaitRise)
+                attach.setValueAsCompleteGesture (0.0f);     // never leave the parameter high
+        }
 
         void request()
         {
             if (pending < kMaxPending) ++pending;
-            if (! isTimerRunning())
-            {
-                tick();
-                startTimer (kHalfPeriodMs);
-            }
+            if (state == State::Idle) startNext();
         }
 
     private:
-        static constexpr int kHalfPeriodMs = 60;
+        enum class State { Idle, WaitRise, WaitFall };
+        static constexpr int kPollMs = 5;
+        static constexpr int kGiveUpMs = 3000;
         static constexpr int kMaxPending = 8;
 
-        void timerCallback() override { tick(); }
-
-        void tick()
+        void startNext()
         {
-            if (high)
+            if (pending == 0)
             {
-                attach.setValueAsCompleteGesture (0.0f);
-                high = false;
-                if (pending == 0) stopTimer();
-            }
-            else if (pending > 0)
-            {
-                --pending;
-                attach.setValueAsCompleteGesture (1.0f);
-                high = true;
-                if (sent != nullptr) ++*sent;
-            }
-            else
+                state = State::Idle;
                 stopTimer();
+                return;
+            }
+            --pending;
+            risingBase = link.rising();
+            attach.setValueAsCompleteGesture (1.0f);
+            if (link.sent != nullptr) ++*link.sent;
+            state = State::WaitRise;
+            since = juce::Time::getMillisecondCounter();
+            startTimer (kPollMs);
+        }
+
+        void timerCallback() override
+        {
+            const int elapsed = (int) (juce::Time::getMillisecondCounter() - since);
+            if (state == State::WaitRise)
+            {
+                const bool seen = link.rising() != risingBase;
+                if (seen || elapsed > kGiveUpMs)
+                {
+                    if (! seen) pending = 0;                  // the audio side is not answering: drop the queue too
+                    fallingBase = link.falling();
+                    attach.setValueAsCompleteGesture (0.0f);
+                    state = State::WaitFall;
+                    since = juce::Time::getMillisecondCounter();
+                }
+            }
+            else if (state == State::WaitFall)
+            {
+                if (link.falling() != fallingBase || elapsed > kGiveUpMs)
+                    startNext();
+            }
         }
 
         juce::ParameterAttachment attach;
-        uint32_t* sent;
+        TriggerLink link;
+        State state = State::Idle;
         int pending = 0;
-        bool high = false;
+        uint32_t risingBase = 0, fallingBase = 0, since = 0;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Pulser)
     };
@@ -205,8 +238,8 @@ namespace smrui
     class PulseButton : public juce::Button
     {
     public:
-        PulseButton (const juce::String& text, juce::RangedAudioParameter& p, int glyphKind, bool dashedOutline, uint32_t* sentCounter = nullptr)
-            : juce::Button (text), pulser (p, sentCounter), glyph (glyphKind), dashed (dashedOutline)
+        PulseButton (const juce::String& text, juce::RangedAudioParameter& p, int glyphKind, bool dashedOutline, TriggerLink link)
+            : juce::Button (text), pulser (p, std::move (link)), glyph (glyphKind), dashed (dashedOutline)
         {
             onClick = [this] { pulser.request(); };
         }
@@ -260,8 +293,8 @@ namespace smrui
     class RotateDial : public juce::Component
     {
     public:
-        RotateDial (juce::RangedAudioParameter& cw, juce::RangedAudioParameter& ccw, uint32_t* sentCw = nullptr, uint32_t* sentCcw = nullptr)
-            : pulseCw (cw, sentCw), pulseCcw (ccw, sentCcw) {}
+        RotateDial (juce::RangedAudioParameter& cw, juce::RangedAudioParameter& ccw, TriggerLink linkCw, TriggerLink linkCcw)
+            : pulseCw (cw, std::move (linkCw)), pulseCcw (ccw, std::move (linkCcw)) {}
 
         void paint (juce::Graphics& g) override
         {

@@ -240,10 +240,24 @@ namespace smr_plugin
                     if (! initial && changed) e.setBank (choiceIndex (v, i));
                     break;
 
-                case Role::RotateCw:  if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) { e.triggerRotateUp();   ++edges_[0]; } break;
-                case Role::RotateCcw: if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) { e.triggerRotateDown(); ++edges_[1]; } break;
-                case Role::ScaleUp:   if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) { e.change_scale_up();    ++edges_[2]; } break;
-                case Role::ScaleDown: if (! initial && ! (prev_[i] >= 0.5f) && isOn (v, i)) { e.change_scale_down();  ++edges_[3]; } break;
+                case Role::RotateCw:
+                case Role::RotateCcw:
+                case Role::ScaleUp:
+                case Role::ScaleDown:
+                {
+                    const int k = s.role == Role::RotateCw ? 0 : s.role == Role::RotateCcw ? 1 : s.role == Role::ScaleUp ? 2 : 3;
+                    const bool wasOn = prev_[i] >= 0.5f, nowOn = isOn (v, i);
+                    if (! initial && ! wasOn && nowOn)
+                    {
+                        if (k == 0) e.triggerRotateUp();
+                        else if (k == 1) e.triggerRotateDown();
+                        else if (k == 2) e.change_scale_up();
+                        else e.change_scale_down();
+                        ++edges_[k];
+                    }
+                    if (! initial && wasOn && ! nowOn) ++releases_[k];
+                    break;
+                }
 
                 default: break;
             }

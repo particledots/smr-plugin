@@ -75,9 +75,12 @@ namespace smr_plugin
         // How many rising edges each trigger has had since this object was made (0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down).
         // A diagnostic for the window (docs/open-questions.md M6-c); it does not affect the audio.
         uint32_t triggerEdges (int which) const { return edges_[which & 3]; }
+        // The same for falling edges (value goes from on to off). The window waits for this before it sends the next pulse.
+        uint32_t triggerReleases (int which) const { return releases_[which & 3]; }
 
     private:
         float prev_[kNumParams] = {};
         uint32_t edges_[4] = {};
+        uint32_t releases_[4] = {};
     };
 }
