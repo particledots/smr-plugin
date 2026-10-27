@@ -533,34 +533,45 @@ namespace
         r.run (48000 * 6, 48000 * 2, 0.03f, noHook);
         report ("Freq (odds) parameter at ADC count 15", r);
 
-        // Against the engine with trackoffset[0] = 15 and the Freq jack at 0, which is what the capture-1 comparisons used.
-        Ref ref2;
-        ref2.start (48000, 512, &s);
-        ref2.ad.engine().trackoffset[0] = 15;
-        Noise nl (12345), nr (67890);
-        std::vector<float> inL (512), inR (512), oL (512), oR (512), o2[2];
-        double num = 0.0, den = 0.0;
-        size_t idx = 0;
-        for (size_t pos = 0; pos < (size_t) 48000 * 6; pos += 512)
+        // Against the engine with trackoffset[0] = 15 and the Freq jack at 0, which is what the capture-1 comparisons used. All four
+        // cases run through the same reference driver, so any difference is the Freq jack path and nothing else.
+        auto renderRef = [&s] (int trackoffset, float freqOct, std::vector<float>& oddsOut)
         {
-            for (int k = 0; k < 512; ++k)
+            Ref ref;
+            ref.v[indexOfId ("freqodds")] = freqOct;
+            ref.start (48000, 512, &s);
+            ref.ad.engine().trackoffset[0] = (int16_t) trackoffset;
+            Noise nl (12345), nr (67890);
+            std::vector<float> inL (512), inR (512), oL (512), oR (512);
+            oddsOut.clear();
+            for (size_t pos = 0; pos < (size_t) 48000 * 6; pos += 512)
             {
-                const bool on = pos + (size_t) k < (size_t) 48000 * 2;
-                inL[(size_t) k] = on ? 0.03f * nl.next() : 0.0f;
-                inR[(size_t) k] = on ? 0.03f * nr.next() : 0.0f;
+                const int n = (int) std::min ((size_t) 512, (size_t) 48000 * 6 - pos);
+                for (int k = 0; k < n; ++k)
+                {
+                    const bool on = pos + (size_t) k < (size_t) 48000 * 2;
+                    inL[(size_t) k] = on ? 0.03f * nl.next() : 0.0f;
+                    inR[(size_t) k] = on ? 0.03f * nr.next() : 0.0f;
+                }
+                ref.ap.apply (ref.ad.engine(), ref.v);
+                ref.ad.process (inL.data(), inR.data(), oL.data(), oR.data(), n);
+                oddsOut.insert (oddsOut.end(), oR.begin(), oR.begin() + n);
             }
-            ref2.ap.apply (ref2.ad.engine(), ref2.v);
-            ref2.ad.process (inL.data(), inR.data(), oL.data(), oR.data(), 512);
-            for (int k = 0; k < 512; ++k, ++idx)
-            {
-                const double a = r.plugOut[1].size() > idx ? r.plugOut[1][idx] : 0.0;   // odds jack: second output slot
-                const double b = oR[(size_t) k];
-                num += (a - b) * (a - b);
-                den += b * b;
-            }
-        }
-        const double db = den > 0.0 ? 10.0 * std::log10 (std::max (num, 1e-300) / den) : 0.0;
-        info ("Freq (odds) ADC 15 against trackoffset 15: difference of the odds output", fmt ("%.1f dB relative to the signal", db));
+        };
+        auto relDb = [] (const std::vector<float>& x, const std::vector<float>& y)
+        {
+            double num = 0.0, den = 0.0;
+            for (size_t i = 0; i < std::min (x.size(), y.size()); ++i) { const double d = (double) x[i] - (double) y[i]; num += d * d; den += (double) y[i] * (double) y[i]; }
+            return den > 0.0 ? 10.0 * std::log10 (std::max (num, 1e-300) / den) : 0.0;
+        };
+        std::vector<float> t15, adc15, base;
+        renderRef (15, 0.0f, t15);
+        renderRef (0, oct, adc15);
+        renderRef (0, 0.0f, base);
+        info ("core driver, odds output: Freq ADC 15 against trackoffset 15", fmt ("%.1f dB relative to the signal (about -300 or lower means identical)", relDb (adc15, t15)));
+        info ("core driver, odds output: Freq ADC 15 against no offset", fmt ("%.1f dB relative to the signal", relDb (adc15, base)));
+        info ("plugin, odds output: Freq ADC 15 against the core driver with Freq ADC 15", fmt ("%.1f dB relative to the signal", relDb (r.plugOut[1], adc15)));
+        info ("plugin, odds output: Freq ADC 15 against the core driver with trackoffset 15", fmt ("%.1f dB relative to the signal", relDb (r.plugOut[1], t15)));
     }
 
     void testDenormals()
