@@ -1,7 +1,7 @@
 Unofficial SMR - install (test build)
 
 EASIEST (AU only, what Logic uses): unzip both zips in Finder (double-click each), open the Unofficial-SMR folder and
-double-click Install-Unofficial-SMR.command. If macOS refuses to open it, right-click it, Open, Open. (Not yet tested on a Mac.)
+double-click Install-Unofficial-SMR.command. It installs into /Library/Audio/Plug-Ins/Components and asks for your Mac password. If macOS refuses to open it, right-click it, Open, Open. (Not yet tested on a Mac; the Terminal steps below install into ~/Library, not /Library.)
 The Terminal steps below do the same and also install the VST3.
 
 This is an early test build. It is not an official product.

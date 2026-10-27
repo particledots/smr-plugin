@@ -151,7 +151,7 @@ Not confirmed until CI is green and Bryn has run docs/testing-milestone-4.md on 
 - Not confirmed: fidelity to the real SMR (Milestone 3 deferred). "Sounds very much like the real SMR" is Bryn's ear on the Intel Mac, no side-by-side.
 Milestone 4: PASSED on both Macs.
 
-## Milestone 5: Plugin DSP match. IN PROGRESS: round 1 (M4 mac mini, 96 kHz) matches; round 2 (Intel Mac, 48 kHz) not done (docs/testing-milestone-5.md)
+## Milestone 5: Plugin DSP match. CLOSED 2026-10-27 (round 1 matches; round 2 skipped by Bryn; M5-d accepted, M5-e keep flush)
 
 Milestone 4 already put the core in the plugin at the firmware rate with resampling, mono handling, the reported latency and the denormal flush. Milestone 5 so far tests those with the real plugin code run headless. Decisions and findings: docs/open-questions.md M5-a to M5-f. Nothing in `src/core`, `src/host` or `src/plugin` was changed.
 
@@ -170,4 +170,4 @@ Not confirmed: the plugin in Logic on either Mac at this milestone; the hardware
 - CI compare-logic (runs 40513849778 and 40517268619): against the render's two channels summed, lag 0, gain +0.003 dB (defaults) and +0.001 dB (Qmax), difference -42.5 and -41.3 dB re signal at whole-sample alignment.
 - Cause of the -42 dB: the core's output depends slightly on where the file starts relative to the core's clock (M5-g). Checked locally with a core-only `smr_render` (g++, not the CI binary): with 525 silent samples placed before the input file, the match to the Logic bounce is -101.4 dB (defaults) and -101.8 dB (Qmax) re signal, the 24-bit rounding level. Whole-sample offsets of 0 or 2000 give -42 and -36 dB. 525 is Logic's own start offset in this project; I did not find out why it is 525.
 - So for these two files the plugin in Logic equals the core's render to the 24-bit bounce limit. Not checked: 48 kHz, the Intel Mac, Logic 10.7.8, any control other than Q.
-Next: Bryn decides M5-d and M5-e; round 2 (Intel Mac, 48 kHz: `M5_in_48000.wav`, same two bounces) if Bryn wants it.
+Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; round 2 skipped. Installer now writes to /Library/Audio/Plug-Ins/Components (untested). Next: Milestone 6 (GUI v1).
