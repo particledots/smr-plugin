@@ -174,7 +174,7 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 
 ## Milestone 6: GUI v1. Started 2026-10-27 (6a code written, NOT yet confirmed)
 
-- Installer (`tools/install/Install-Unofficial-SMR.command`, build run 40519583006, commit d570345): Bryn used it on 2026-10-27 and the plugin then loaded in Logic (screenshot: Logic, host 44100 Hz, latency 33 samples). He did not say which Mac that first install was on (I had written "M4 mac mini" without his saying so; corrected), nor what macOS asked, nor the script's last line.
+- Installer (`tools/install/Install-Unofficial-SMR.command`, build run 40519583006, commit d570345): Bryn used it on 2026-10-27 and the plugin then loaded in Logic (screenshot: Logic, host 44100 Hz, latency 33 samples). Bryn later said that first install was on the Intel Mac (I had written "M4 mac mini" without his saying so; corrected). Not recorded: what macOS asked, the script's last line. The installer is not yet tested on the M4 mac mini.
 - Decisions: docs/open-questions.md "Milestone 6 decisions". Split into 6a (layout and controls) and 6b (displays).
 - 6a written: `src/plugin/PluginEditor.*` (sketch v3 layout, controls bound to the existing 41 parameters, nothing new), `src/plugin/SmrUi.h`, new check `testEditor` in `tests/plugin_tests.cpp`. `src/core`, `src/host` and the parameter table are not changed.
 - Not confirmed until CI is green and Bryn has run docs/testing-milestone-6a.md on both Macs: that the code builds, the window, every control, the trigger pulses (M6-c), resize in Logic 10.7.8.
