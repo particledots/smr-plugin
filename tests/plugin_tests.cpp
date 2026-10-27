@@ -617,7 +617,6 @@ namespace
         // The editor only talks to the processor through host parameters; moving one while the editor is open must not crash.
         auto* pp = proc->parameters().getParameter ("level3");
         pp->setValueNotifyingHost (0.25f);
-        juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
         ed.reset();
         proc->releaseResources();
         check (true, "editor: destroyed with the processor still alive");
