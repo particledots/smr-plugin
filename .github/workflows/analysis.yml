@@ -1,0 +1,37 @@
+name: Capture analysis (Milestone 3)
+
+# Stage 1: self-test of the analysis tool on fake recordings with known answers.
+# Results appear as annotations on the run (CI logs cannot be downloaded in Claude's session).
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'tools/analysis/**'
+      - 'tools/capture/gen_signals.py'
+      - '.github/workflows/analysis.yml'
+  pull_request:
+    paths:
+      - 'tools/analysis/**'
+      - 'tools/capture/gen_signals.py'
+      - '.github/workflows/analysis.yml'
+  workflow_dispatch:
+
+jobs:
+  analysis-selftest:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install numpy and scipy
+        run: |
+          python -m pip install -r tools/analysis/requirements.txt
+          python -c "import numpy, scipy; print('numpy', numpy.__version__, 'scipy', scipy.__version__)"
+
+      - name: Self-test on fake recordings
+        run: |
+          python tools/analysis/selftest.py "$RUNNER_TEMP/selftest"
