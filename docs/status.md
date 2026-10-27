@@ -150,3 +150,18 @@ Not confirmed until CI is green and Bryn has run docs/testing-milestone-4.md on 
 - Not recorded: run number installed, underruns count, results broken down per Mac. Treated as the same on both.
 - Not confirmed: fidelity to the real SMR (Milestone 3 deferred). "Sounds very much like the real SMR" is Bryn's ear on the Intel Mac, no side-by-side.
 Milestone 4: PASSED on both Macs.
+
+## Milestone 5: Plugin DSP match. IN PROGRESS: CI results confirmed; waiting for Bryn's Logic recordings (docs/testing-milestone-5.md)
+
+Milestone 4 already put the core in the plugin at the firmware rate with resampling, mono handling, the reported latency and the denormal flush. Milestone 5 so far tests those with the real plugin code run headless. Decisions and findings: docs/open-questions.md M5-a to M5-f. Nothing in `src/core`, `src/host` or `src/plugin` was changed.
+
+Confirmed by CI (new: `tests/plugin_tests.cpp`, a JUCE console app built from `src/plugin/PluginProcessor.cpp`; step "Build and run the Milestone 5 plugin tests" in build.yml):
+- `smr_plugin_tests selftest`: 33 checks, 0 failed, on arm64 and on x86_64 under Rosetta (build run 40467599259, commit 94d3d31; repeated on 83e42c8, run 40469463502). The plugin equals a reference built from `BlockAdapter` and `ParamApplier` bit for bit in every scenario listed in M5-a. Denormal flush: 0 of 4,800,000 samples differ in a 100 s Q max run, the output reaches exactly 0 (M5-e).
+- Plugin against hardware, same measurement as the core (analysis run 40467599121, job compare-plugin, plugin run at the capture-1 state with the Freq (odds) parameter at ADC count 15): frequency 18 of 18 inside 1 cent (odds mean +0.03 cent, evens -0.06), width 6 of 18, gain 4 of 18, Q min tilt +6.7 dB at 16 kHz. These are the same numbers as the core's default path (run 40461296803). The plugin output is bit-identical to the core's render after a one-sample shift (the plugin trims the reported latency, `smr_render` the rounded one): 11,039,999 of 11,039,999 samples identical in all eight files (M5-c).
+- Reported latency 26 to 83 samples (22050 to 192000 Hz); not independently measured (M5-b).
+- The comparison tool for Logic bounces `tools/analysis/compare_logic.py` works on fake bounces (shifted by 37 samples, quantised to 24 bit, one at -3 dB; workflow logic-compare.yml, run 40469463507): lag +37 found, gain -3.010 dB found, difference after fitting the gain -100.0 to -106.6 dB re signal, which is the 24-bit rounding level a perfect bounce would show. It validates the tool only.
+
+Not confirmed: the plugin in Logic on either Mac at this milestone; the hardware's state cannot be set from the plugin window (M5-d, decision needed); every difference from the hardware listed under M3 is unchanged.
+
+Next: Bryn runs docs/testing-milestone-5.md (8 bounces), uploads release `m5-logic-1`; then I run the `compare-logic` job and report.
+
