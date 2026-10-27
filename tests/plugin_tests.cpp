@@ -9,7 +9,7 @@
 //       Every check prints one line starting PASS:, FAIL: or INFO:. Exit code 0 only if no check failed.
 //
 //   smr_plugin_tests IN.wav OUT.wav [--pot 0=V] [--gain-db X] [--chan CH=BANK,SCALE,NOTE] [--trackoffset 0=V] [--script FILE]
-//                                   [--tail SECONDS] [--block N]
+//                                   [--set ID=VALUE] [--tail SECONDS] [--block N]
 //       Renders IN.wav through the plugin (host rate = file rate, stereo out) and writes a 32-bit float stereo WAV, left =
 //       first output slot, right = second, latency trimmed. Same file layout as smr_render, so tools/analysis/port_passes.py
 //       can call it with --render. Only the options above exist; --trackoffset 0=V is emulated through the Freq (odds)
@@ -564,14 +564,15 @@ namespace
             for (size_t i = 0; i < std::min (x.size(), y.size()); ++i) { const double d = (double) x[i] - (double) y[i]; num += d * d; den += (double) y[i] * (double) y[i]; }
             return den > 0.0 ? 10.0 * std::log10 (std::max (num, 1e-300) / den) : 0.0;
         };
-        std::vector<float> t15, adc15, base;
-        renderRef (15, 0.0f, t15);
+        std::vector<float> t15, adc15, base;   // t15: trackoffset 4 on top of Freq 0 (name kept short)
+        // Freq 0 octaves is ADC count 11 (index 0 of exp_1voct[], BASE_TRACKOFFSET), so ADC 15 and trackoffset 4 on top of Freq 0 reach the same index.
+        renderRef (4, 0.0f, t15);
         renderRef (0, oct, adc15);
         renderRef (0, 0.0f, base);
-        info ("core driver, odds output: Freq ADC 15 against trackoffset 15", fmt ("%.1f dB relative to the signal (about -300 or lower means identical)", relDb (adc15, t15)));
+        info ("core driver, odds output: Freq ADC 15 against Freq 0 plus trackoffset 4", fmt ("%.1f dB relative to the signal (about -300 or lower means identical)", relDb (adc15, t15)));
         info ("core driver, odds output: Freq ADC 15 against no offset", fmt ("%.1f dB relative to the signal", relDb (adc15, base)));
         info ("plugin, odds output: Freq ADC 15 against the core driver with Freq ADC 15", fmt ("%.1f dB relative to the signal", relDb (r.plugOut[1], adc15)));
-        info ("plugin, odds output: Freq ADC 15 against the core driver with trackoffset 15", fmt ("%.1f dB relative to the signal", relDb (r.plugOut[1], t15)));
+        info ("plugin, odds output: Freq ADC 15 against the core driver with Freq 0 plus trackoffset 4", fmt ("%.1f dB relative to the signal", relDb (r.plugOut[1], t15)));
     }
 
     void testDenormals()
@@ -624,6 +625,7 @@ namespace
         bool haveQ = false;
         struct Ch { bool set = false; int bank = 0, scale = 0, note = 0; } ch[6];
         std::string script;
+        std::vector<std::pair<std::string, float>> sets;
 
         for (int i = 3; i < argc; ++i)
         {
@@ -639,6 +641,13 @@ namespace
             else if (a == "--tail") tail = std::atof (next().c_str());
             else if (a == "--block") block = std::atoi (next().c_str());
             else if (a == "--script") script = next();
+            else if (a == "--set")
+            {
+                const std::string kv = next();
+                const size_t eq = kv.find ('=');
+                if (eq == std::string::npos || indexOfId (kv.substr (0, eq).c_str()) < 0) { std::fputs ("error: --set ID=VALUE with a parameter id from ParamMap.cpp\n", stderr); return 2; }
+                sets.emplace_back (kv.substr (0, eq), (float) std::atof (kv.c_str() + eq + 1));
+            }
             else if (a == "--trackoffset")
             {
                 int k = -1, v = 0;
@@ -700,6 +709,8 @@ namespace
         proc->setRateAndBufferSizeDetails ((double) in.rate, block);
         proc->prepareToPlay ((double) in.rate, block);
         if (! proc->status().rateSupported) { std::fprintf (stderr, "error: sample rate %d Hz is not supported by the plugin\n", in.rate); return 1; }
+        // Set after the plugin is prepared, as a user moves a control in the plugin window before pressing play.
+        for (const auto& kv : sets) setp (kv.first.c_str(), kv.second);
 
         const size_t inFrames = in.frames();
         const size_t latency = (size_t) proc->getLatencySamples();
@@ -752,6 +763,6 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI juceInit;
     if (argc >= 2 && std::strcmp (argv[1], "selftest") == 0) return selftest();
     if (argc >= 3 && std::strstr (argv[1], ".wav") != nullptr) return render (argc, argv);
-    std::fputs ("usage: smr_plugin_tests selftest\n       smr_plugin_tests IN.wav OUT.wav [--pot 0=V] [--gain-db X] [--chan CH=B,S,N] [--trackoffset 0=V] [--script FILE] [--tail S] [--block N]\n", stderr);
+    std::fputs ("usage: smr_plugin_tests selftest\n       smr_plugin_tests IN.wav OUT.wav [--pot 0=V] [--gain-db X] [--chan CH=B,S,N] [--trackoffset 0=V] [--script FILE] [--set ID=V] [--tail S] [--block N]\n", stderr);
     return 2;
 }
