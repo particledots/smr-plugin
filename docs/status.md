@@ -151,7 +151,7 @@ Not confirmed until CI is green and Bryn has run docs/testing-milestone-4.md on 
 - Not confirmed: fidelity to the real SMR (Milestone 3 deferred). "Sounds very much like the real SMR" is Bryn's ear on the Intel Mac, no side-by-side.
 Milestone 4: PASSED on both Macs.
 
-## Milestone 5: Plugin DSP match. IN PROGRESS: CI results confirmed; waiting for Bryn's Logic recordings (docs/testing-milestone-5.md)
+## Milestone 5: Plugin DSP match. IN PROGRESS: round 1 (M4 mac mini, 96 kHz) matches; round 2 (Intel Mac, 48 kHz) not done (docs/testing-milestone-5.md)
 
 Milestone 4 already put the core in the plugin at the firmware rate with resampling, mono handling, the reported latency and the denormal flush. Milestone 5 so far tests those with the real plugin code run headless. Decisions and findings: docs/open-questions.md M5-a to M5-f. Nothing in `src/core`, `src/host` or `src/plugin` was changed.
 
@@ -163,5 +163,11 @@ Confirmed by CI (new: `tests/plugin_tests.cpp`, a JUCE console app built from `s
 
 Not confirmed: the plugin in Logic on either Mac at this milestone; the hardware's state cannot be set from the plugin window (M5-d, decision needed); every difference from the hardware listed under M3 is unchanged.
 
-Next: Bryn runs docs/testing-milestone-5.md (8 bounces), uploads release `m5-logic-1`; then I run the `compare-logic` job and report.
-
+### Round 1 result (M4 mac mini, Tahoe, Logic 11.2, 96 kHz; release m5-logic-1, files M5_M4mini_96000_defaults and _Qmax; analysis 2026-10-27)
+- Status line in Logic: "Host 96000 Hz, latency 51 samples, underruns 0". Plugin loaded from /Library/Audio/Plug-Ins/Components (AU only).
+- Logic's files are named `...wav.wav` (hidden extension added a second .wav); logic-compare.yml now strips it. The release was published as a normal release, not a pre-release (harmless).
+- The bounces have identical left and right channels: Logic ran the plugin mono-in, mono-out, which sums both output slots (`PluginProcessor.cpp processBlock`, nOut == 1; M1-m, M4). Both files are 256 s long (24,576,000 frames), mostly silence after the 42 s of signal.
+- CI compare-logic (runs 40513849778 and 40517268619): against the render's two channels summed, lag 0, gain +0.003 dB (defaults) and +0.001 dB (Qmax), difference -42.5 and -41.3 dB re signal at whole-sample alignment.
+- Cause of the -42 dB: the core's output depends slightly on where the file starts relative to the core's clock (M5-g). Checked locally with a core-only `smr_render` (g++, not the CI binary): with 525 silent samples placed before the input file, the match to the Logic bounce is -101.4 dB (defaults) and -101.8 dB (Qmax) re signal, the 24-bit rounding level. Whole-sample offsets of 0 or 2000 give -42 and -36 dB. 525 is Logic's own start offset in this project; I did not find out why it is 525.
+- So for these two files the plugin in Logic equals the core's render to the 24-bit bounce limit. Not checked: 48 kHz, the Intel Mac, Logic 10.7.8, any control other than Q.
+Next: Bryn decides M5-d and M5-e; round 2 (Intel Mac, 48 kHz: `M5_in_48000.wav`, same two bounces) if Bryn wants it.
