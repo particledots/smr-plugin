@@ -22,7 +22,7 @@ Check the files are the right ones: `shasum -a 256 ~/Downloads/smr_sig_*.wav` in
 
 ## B. Patch the SMR (once)
 Unpatch every cable from the SMR first. Then:
-- Scarlett rear LINE OUTPUT 1 to the SMR **IN, odds** jack (the one with the black ring, top left of the IN group).
+- Scarlett rear LINE OUTPUTS jack labelled **LEFT** (this is output 1; not RIGHT, which carries only silence) to the SMR **IN, odds** jack (the one with the black ring, top left of the IN group).
 - SMR **OUT, odds** jack to Scarlett front input 1.
 - SMR **OUT, evens** jack (the one with the black ring) to Scarlett front input 2.
 - Nothing else patched. The SMR IN evens jack stays empty. It is wired to follow the odds jack (manual, Controls and Jacks).
