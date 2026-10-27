@@ -1,12 +1,14 @@
 # tools/analysis: Milestone 3 hardware-capture analysis
 
-Measures the recordings made through the real SMR (docs/capture-sheet.md). It measures only: it does not yet compare with the port and it states no pass or fail against the agreed tolerances (1 cent, 0.5 dB, 10% decay). Nothing here is confirmed until a CI run shows it.
+Measures the recordings made through the real SMR (docs/capture-sheet.md), and compares the port's render with them. Nothing here is confirmed until a CI run shows it.
 
 | File | What it is |
 |---|---|
 | `smrcap.py` | WAV reader (Logic's extra chunks tolerated), file-name matcher, signal timeline, annotations |
 | `analyse_capture.py` | the analysis: `analyse_capture.py CAPDIR [--json OUT.json]` |
 | `fake_capture.py` | fake recordings with known answers (plain two-pole resonators, not a model of the SMR) |
+| `port_passes.py` | renders the port at the identified state through the same test signal and writes hardware-style WAV files (`--variant base/offset/bank2`) |
+| `compare_port.py` | `compare_port.py HWDIR PORTDIR`: per-resonance frequency (cent), width (%), gain (dB, one common offset per jack removed), and the whole Q min response in third-octave bands |
 | `selftest.py` | runs the analysis on the fake recordings and checks it recovers the known values and flags known faults |
 
 Needs numpy and scipy (`requirements.txt`). Run only in CI; never on Bryn's Macs.

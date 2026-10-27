@@ -51,7 +51,7 @@ Bryn's renderer test, 2026-10-25:
 
 Note: CI logs cannot be downloaded in Claude's session (HTTP 403). The workflow writes results as annotations.
 
-## Milestone 3: Hardware reference. IN PROGRESS: capture-1 recorded, measurement tool CI green, comparison with the port NOT started
+## Milestone 3: Hardware reference. IN PROGRESS: capture-1 recorded, port compared with it in CI (run 40454798347); frequencies inside 1 cent only with an unexplained odds-jack offset; widths and gains NOT matched
 
 Bryn first deferred the capture (2026-10-25), then recorded it on 2026-10-26 (release capture-1). The capture is needed before Milestone 5 (plugin DSP match) can be confirmed. Until the comparison is done, fidelity against the real SMR is unconfirmed.
 
@@ -83,7 +83,29 @@ Confirmed by CI (commit 9e18c5d, workflow `analysis.yml`):
 | Noise source, nothing patched (P0) | rms -36.5 dBFS (odds) and -36.3 dBFS (evens), correlation between the jacks 0.809. |
 | Level steps | Only the top 2 to 4 steps are 10 dB above the floor; statistical uncertainty of each step 0.08 to 1.8 dB (1 sigma). |
 
-The hardware is not at the source default scale (65.40 to 130.80 Hz, M1-r). Not yet done: identify the bank and scale, render the port at the same settings, compare. M1-n (absolute level) stays open without P5. M2-b (96,000 versus 95,982 Hz) and M2-c cannot be judged until the port is rendered at the hardware's scale. Details and decisions needed: docs/open-questions.md M3-a to M3-f. Method and assumptions: tools/analysis/README.md.
+The hardware is not at the source default scale (65.40 to 130.80 Hz, M1-r). M1-n (absolute level) stays open without P5. Details and decisions needed: docs/open-questions.md M3-a to M3-j. Method and assumptions: tools/analysis/README.md.
+
+### Port against capture-1 (CI run 40454798347, commit 9757f39, job compare-port)
+
+Port rendered by `tools/analysis/port_passes.py` (`smr_render`, GCC build, input -30 dB, no saturation, no loop-guard trips, no underruns), measured by the same `analyse_capture.py` code as the hardware, compared by `tools/analysis/compare_port.py`. Tolerances as agreed (1 cent, 10% width, 0.5 dB gain; one common gain offset per jack removed because the absolute level is unknown, M1-n). Mapping: right output to the odds file, left to the evens file (M3-a).
+
+Identified state (from the source tables, see M3-f): all six channels bank 6 (channels 4 and 6 could also be bank 2), scales 2/10/2/2/2/2 (odds scale undetermined), notes 6 to 11 at P3.
+
+| Variant | Frequency (18 peaks, 9 per jack) | Width inside 10% | Gain inside 0.5 dB |
+|---|---|---|---|
+| base (no offset) | 9 inside; odds jack -5.50 cent mean (-5.02 to -6.06), evens +0.26 mean (+0.16 to +0.35) | 6 of 18 | 4 of 18 |
+| offset (odds trackoffset 15, +5.80 cent, a stand-in chosen to fit) | 18 inside; odds +0.36 mean (+0.13 to +0.68), evens +0.26 | 7 of 18 | 4 of 18 |
+| bank2 (channels 4, 6 in bank 2, plus the offset) | 18 inside; evens +0.37 mean (+0.20 to +0.49) | 7 of 18 | 4 of 18 |
+
+What the numbers say, nothing more:
+- The evens jack matches in frequency without any offset (all nine peaks within +0.16 to +0.35 cent, port higher). Bank 6 and bank 2 for channels 4 and 6 are not separable (difference at most 0.15 cent).
+- The odds jack is 5.0 to 6.1 cent below the hardware without an offset. The cause is unknown (M3-g); the offset variant is a fit, not an explanation.
+- Width: Q mid (P3b) is 23 to 35% narrower in the port on both jacks. Q max (P3c): odds +16, +9, -7%; evens +14, +33, -3%. Q mid knob position is imprecise (M3-h), so P3b is indicative only. The 27.3 Hz odds peak in P4 is 434% wider in the port (hardware low end, M1-l, not yet examined).
+- Gain after the common offset: P3b within 0.9 dB, P3c port 2.0 to 3.6 dB lower, P4 high peaks port 0.9 to 5.0 dB higher (14.5 and 17.7 kHz: +4.6 and +5.0 dB). Not interpretable without P5 (M3-e) and not examined further.
+- Q min whole response (28 and 26 third-octave bands above the hardware floor): within 0.5 dB up to about 2.5 kHz, then the port is higher by +0.7 dB at 3.2 kHz rising smoothly to +6.7 dB at 16 kHz, on both jacks. 8 bands outside tolerance per jack. Cause not examined (M3-i).
+- M2-b: the evens port is +0.26 cent high on average, which is the sign and about the size of the -0.32 cent that a core rate of 95,982.14 Hz would give. This is consistent with M2-b, not proof: no render at 95,982.14 Hz has been run and the odds offset is not understood. M2-c (12 kHz main loop) cannot be judged from this data.
+
+Nothing here is a statement that the port matches the SMR. Frequencies pass only with an unexplained offset on one jack; widths and gains do not pass.
 
 ## Milestone 4: Parameter layer and audio wiring (code written, NOT yet confirmed)
 
