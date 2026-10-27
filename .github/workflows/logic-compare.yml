@@ -89,6 +89,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/b"
           gh release download "${{ github.event.inputs.tag }}" --repo "${{ github.repository }}" --pattern '*.zip' --dir "$RUNNER_TEMP/b"
           for z in "$RUNNER_TEMP"/b/*.zip; do unzip -q -o "$z" -x '__MACOSX/*' -d "$RUNNER_TEMP/b/x"; done
+          # Logic can append a second .wav to the typed name (hidden extension): accept both
+          find "$RUNNER_TEMP/b/x" -name 'M5_*.wav.wav' | while read -r f; do mv "$f" "${f%.wav}"; done
           find "$RUNNER_TEMP/b/x" -name 'M5_*.wav' | sort
       - name: Compare
         run: |
