@@ -165,7 +165,9 @@ def task_qfit(R, ref):
         i = 1   # the middle peak of each jack
         lines.append("Port width (Hz) against Q count, %s jack %.1f Hz: " % (j, ref["P3c_" + j][i]["f_hz"]) +
                      ", ".join("%d: %.3f" % (q, meas[j][q][i]["fwhm"]) for q in qs if meas[j][q][i]))
+    ann.append(("notice", "M3-h Q fit, port width against Q count (core rate %.4f Hz)" % RATE, lines))
     for pid in ("P3b", "P3c"):
+        lines = []
         peaks = []   # (jack, idx, f_hw, w_hw, g_hw, widths over q, gains over q)
         for j in JACKS:
             for i, r in enumerate(ref["%s_%s" % (pid, j)]):
@@ -197,7 +199,7 @@ def task_qfit(R, ref):
         nin = sum(abs(r) <= K.TOL_WIDTH_PCT for r in resid)
         lines.append("  at %.0f: %d of %d widths inside %.0f %%; gain port minus hardware spread %.2f dB (max minus min)" % (qbest, nin, len(peaks), K.TOL_WIDTH_PCT, max(gres) - min(gres)))
         out[pid] = dict(best_q=qbest, width_resid_pct=resid, gain_diff_db=gres)
-    ann.append(("notice", "M3-h Q fit (core rate %.4f Hz)" % RATE, lines))
+        ann.append(("notice", "M3-h Q fit, %s peaks (core rate %.4f Hz)" % (pid, RATE), lines))
     return out, ann
 
 
