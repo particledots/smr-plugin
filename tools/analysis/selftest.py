@@ -15,6 +15,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import analyse_capture as A   # noqa: E402
+import compare_port as P      # noqa: E402
 import fake_capture as F      # noqa: E402
 import smrcap as C            # noqa: E402
 
@@ -208,6 +209,70 @@ def test_faults(capdir):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def through_mod(x, modes, q, rng):
+    """Like fake_capture.through, but each mode is (frequency, amplitude, T60 scale)."""
+    y = np.zeros(len(x))
+    for f, amp, ts in modes:
+        y += F.resonator(x, f, F.T60[q] * ts, amp)
+    y = np.concatenate([np.zeros(F.LATENCY), y])[:len(x)]
+    return y + rng.standard_normal(len(x)) * 10 ** (F.FLOOR_DBFS / 20) + 1.53e-5
+
+
+def test_compare(capdir):
+    """The port-against-hardware comparison, on fake data. Same recordings against themselves must give zero differences;
+    a copy with a known +2 cent shift, a +25 % width and a +1 dB gain change on one peak each must show exactly those."""
+    _, hw = A.load_capture(capdir, A.Report())
+    keys = [(p, j) for p in ("P3a", "P3b", "P3c", "P4") for j in (1, 2)]
+    hwm = {k: hw[k] for k in keys}
+
+    res, ann = P.compare(hwm, hwm, "same")
+    pk = res["peaks"]
+    check("compare: the same recordings give 18 paired peaks", len(pk) == 18, str(res["notes"]))
+    check("compare: the same recordings differ by 0.00 cent, 0.0 % width, 0.00 dB", pk and max(abs(p["dcent"]) for p in pk) < 1e-9
+          and max(abs(p["dwidth_pct"]) for p in pk) < 1e-9 and max(abs(p["rgain"]) for p in pk) < 1e-9)
+    check("compare: the same recordings are all inside the tolerances and reported as a notice",
+          res.get("inside", {}).get("frequency") == 18 and res["inside"]["width"] == 18 and res["inside"]["gain"] == 18 and ann[0][0] == "notice")
+    qm = res["q_min_response"]
+    dev_same = max((abs(v) for r in qm.values() for i, v in enumerate(r["dev_db"]) if r["gated"][i]), default=None)
+    check("compare: Q min response of the same recordings deviates by 0 dB over some gated bands", dev_same is not None and dev_same < 1e-9 and any(any(r["gated"]) for r in qm.values()), str(dev_same))
+
+    # Modified copy: odds peak 0 +2 cent, odds peak 1 width +25 % (T60 / 1.25), odds peak 2 +1 dB. Evens unchanged.
+    shift = 2.0 ** (2.0 / 1200.0)
+    amp = 10 ** (1.0 / 20.0)
+    rng = np.random.default_rng(11)
+    main = C.main_input()
+    n = int(104.7 * FS)
+    mod = {}
+    for pid, q, o, e in (("P3a", "min", F.ODDS, F.EVENS), ("P3b", "mid", F.ODDS, F.EVENS), ("P3c", "max", F.ODDS, F.EVENS), ("P4", "max", F.ODDS_ROT, F.EVENS_ROT)):
+        om = [(o[0][0] * shift, o[0][1], 1.0), (o[1][0], o[1][1], 1.0 / 1.25), (o[2][0], o[2][1] * amp, 1.0)]
+        em = [(f, a, 1.0) for f, a in e]
+        for jack, modes in ((1, om), (2, em)):
+            y = through_mod(main, modes, q, rng)[:n]
+            mod[(pid, jack)] = C.Wav(y.astype(np.float32).reshape(-1, 1), FS, 24, 1, [])
+    res2, ann2 = P.compare(hwm, mod, "modified")
+    pk2 = res2["peaks"]
+    check("compare: the modified copy gives 18 paired peaks", len(pk2) == 18, str(res2["notes"]))
+    sel = lambda jack, i: [p for p in pk2 if p["jack"] == jack and p["idx"] == i]   # noqa: E731
+    check("compare: odds peak 0 shows +2.0 cent (within 0.3) in all three passes", len(sel("odds", 0)) == 3 and all(abs(p["dcent"] - 2.0) < 0.3 for p in sel("odds", 0)),
+          str([round(p["dcent"], 2) for p in sel("odds", 0)]))
+    check("compare: odds peak 1 shows +25 % width (within 4 points) in all three passes", len(sel("odds", 1)) == 3 and all(abs(p["dwidth_pct"] - 25.0) < 4.0 for p in sel("odds", 1)),
+          str([round(p["dwidth_pct"], 1) for p in sel("odds", 1)]))
+    check("compare: odds peak 2 shows +1.0 dB gain residual (within 0.2) and no frequency or width change",
+          len(sel("odds", 2)) == 3 and all(abs(p["rgain"] - 1.0) < 0.2 and abs(p["dcent"]) < 0.3 and abs(p["dwidth_pct"]) < 4.0 for p in sel("odds", 2)),
+          str([(round(p["rgain"], 2), round(p["dcent"], 2), round(p["dwidth_pct"], 1)) for p in sel("odds", 2)]))
+    ev = [p for p in pk2 if p["jack"] == "evens"]
+    check("compare: unchanged evens peaks stay within 0.3 cent, 3 % width, 0.2 dB", len(ev) == 9 and all(abs(p["dcent"]) < 0.3 and abs(p["dwidth_pct"]) < 3.0 and abs(p["rgain"]) < 0.2 for p in ev),
+          str([(round(p["dcent"], 2), round(p["dwidth_pct"], 1), round(p["rgain"], 2)) for p in ev]))
+    ins = res2.get("inside", {})
+    check("compare: the modified copy is reported as outside the tolerances (warning); the three planted misses are counted",
+          ann2[0][0] == "warning" and ins.get("frequency") == 18 - 3 and ins.get("width") == 18 - 3 and ins.get("gain", 99) <= 18 - 3, str(ins))
+    qm2 = res2["q_min_response"]
+    ev_dev = max((abs(v) for i, v in enumerate(qm2["evens"]["dev_db"]) if qm2["evens"]["gated"][i]), default=None) if "evens" in qm2 else None
+    od_dev = max((abs(v) for i, v in enumerate(qm2["odds"]["dev_db"]) if qm2["odds"]["gated"][i]), default=None) if "odds" in qm2 else None
+    check("compare: Q min response shows the planted change on the odds jack and not on the evens jack",
+          ev_dev is not None and od_dev is not None and od_dev > 0.5 and ev_dev < 0.5 and ann2[1][0] == "warning", "odds %s, evens %s" % (od_dev, ev_dev))
+
+
 def main():
     work = sys.argv[1] if len(sys.argv) > 1 else tempfile.mkdtemp(prefix="smr_selftest_")
     capdir = os.path.join(work, "fake_capture")
@@ -218,6 +283,7 @@ def main():
     F.build(capdir)
     test_good(capdir)
     test_faults(capdir)
+    test_compare(capdir)
     bad = [(n, d) for n, ok, d in RESULTS if not ok]
     good = [n for n, ok, _ in RESULTS if ok]
     C.emit("notice", "Analysis self-test: %d of %d checks passed" % (len(good), len(RESULTS)), good)

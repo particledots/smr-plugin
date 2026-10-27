@@ -3,6 +3,7 @@ name: Capture analysis (Milestone 3)
 # Job 1: self-test of the analysis tool on fake recordings with known answers.
 # Job 2 (only after job 1 passes, and not on pull requests): analyse the real hardware recordings attached to the
 # GitHub release tagged capture-1 (asset SMRCapture.zip).
+# Job 3 (after job 2): render the port at the identified settings and compare with the hardware (compare_port.py).
 # Results appear as annotations on the run (CI logs cannot be downloaded in Claude's session).
 
 on:
@@ -11,11 +12,15 @@ on:
     paths:
       - 'tools/analysis/**'
       - 'tools/capture/gen_signals.py'
+      - 'tools/smr_render/**'
+      - 'src/core/**'
       - '.github/workflows/analysis.yml'
   pull_request:
     paths:
       - 'tools/analysis/**'
       - 'tools/capture/gen_signals.py'
+      - 'tools/smr_render/**'
+      - 'src/core/**'
       - '.github/workflows/analysis.yml'
   workflow_dispatch:
     inputs:
@@ -83,3 +88,53 @@ jobs:
         with:
           name: capture-analysis-result
           path: ${{ runner.temp }}/analysis_result.json
+
+  compare-port:
+    needs: analyse-capture
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      CAPTURE_TAG: ${{ github.event.inputs.tag || 'capture-1' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install numpy and scipy
+        run: python -m pip install -r tools/analysis/requirements.txt
+
+      - name: Build smr_render (core only, GCC)
+        run: |
+          cmake -S . -B build_cmp -DSMR_CORE_ONLY=ON -DCMAKE_BUILD_TYPE=Release > cmake_log.txt 2>&1 || { tail -30 cmake_log.txt; echo "::error::cmake failed"; exit 1; }
+          cmake --build build_cmp --target smr_render -j4 > build_log.txt 2>&1 || { tail -40 build_log.txt; echo "::error::smr_render build failed: $(grep -m1 'error' build_log.txt | cut -c1-300)"; exit 1; }
+          echo "::notice::smr_render built"
+
+      - name: Download the capture from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/cap"
+          gh release download "$CAPTURE_TAG" --repo "${{ github.repository }}" --pattern 'SMRCapture.zip' --dir "$RUNNER_TEMP/cap"
+          unzip -q "$RUNNER_TEMP/cap/SMRCapture.zip" -x '__MACOSX/*' -d "$RUNNER_TEMP/cap/x"
+
+      - name: Render the port and compare (variants base, offset, bank2)
+        run: |
+          d=$(find "$RUNNER_TEMP/cap/x" -type d -name SMRCapture | head -1)
+          [ -n "$d" ] || d="$RUNNER_TEMP/cap/x"
+          mkdir -p "$RUNNER_TEMP/out"
+          for v in base offset bank2; do
+            python tools/analysis/port_passes.py --render build_cmp/smr_render --outdir "$RUNNER_TEMP/port_$v" --variant $v
+            python tools/analysis/compare_port.py "$d" "$RUNNER_TEMP/port_$v" --label $v --json "$RUNNER_TEMP/out/compare_$v.json"
+          done
+
+      - name: Keep the numbers
+        uses: actions/upload-artifact@v4
+        with:
+          name: port-comparison-result
+          path: ${{ runner.temp }}/out/*.json

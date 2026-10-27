@@ -29,6 +29,11 @@ namespace
         "  --pot N=V      N in 0..6    0 Q pot, 1..6 channel sliders\n"
         "  --sw NAME=0|1  env_pre (1 = PRE, 0 = POST), mod246_six, mod135_one, range, env_fast, env_slow, rotary_sw, cvlag\n"
         "  --mode twopass|onepass      --type maxq|bpre      --bank 0..19 (all channels)\n"
+        "  --chan CH=BANK,SCALE,NOTE   per-channel state as the firmware saves it (system_mode.c load_params_from_sram): CH 1..6, BANK 0..19,\n"
+        "                              SCALE 0..10, NOTE 0..19. Applied at start-up. Wins over --bank for that channel. Repeat for each channel.\n"
+        "  --trackoffset N=V           Freq jack tracking offset (params.c trackoffset[N], N 0 = channels 1/3/5, 1 = channels 2/4/6), signed counts.\n"
+        "                              The firmware adds it to the Freq jack ADC count (BASE_TRACKOFFSET -11 is added too). Default 0.\n"
+        "  --gain-db X                 gain applied to the input before it reaches the core (default 0). Level scale is a placeholder (M1-n).\n"
         "  --freqblock MASK            blocked frequency positions, bit n = position n (at most 14 bits, below bit 20)\n"
         "  --script FILE               timed control changes, one per line: TIME_SECONDS adc N V | pot N V | sw NAME V |\n"
         "                              rotup | rotdown | lock135 | lock246 | bank B | mode M | type T   (# starts a comment)\n"
@@ -47,7 +52,12 @@ namespace
         uint32_t freqblock = 0;
         int block = 64;
         double tail = 2.0;
+        double gainDb = 0.0;
         bool compensate = true;
+        bool chanSet[smr::kNumChannels] = {};
+        int chanBank[smr::kNumChannels] = {}, chanScale[smr::kNumChannels] = {}, chanNote[smr::kNumChannels] = {};
+        bool trackSet[2] = {};
+        int trackOffset[2] = {};
         std::string script;
     };
 
@@ -178,6 +188,26 @@ int main (int argc, char** argv)
         else if (a == "--mode") { const std::string s = next(); if (s == "twopass") cfg.mode = 2; else if (s == "onepass") cfg.mode = 3; else { std::fputs ("error: --mode twopass|onepass\n", stderr); return 2; } }
         else if (a == "--type") { const std::string s = next(); if (s == "maxq") cfg.type = 2; else if (s == "bpre") cfg.type = 1; else { std::fputs ("error: --type maxq|bpre\n", stderr); return 2; } }
         else if (a == "--bank") { cfg.bank = std::atoi (next().c_str()); if (cfg.bank < 0 || cfg.bank >= smr::kNumScaleBanks) { std::fputs ("error: --bank 0..19\n", stderr); return 2; } }
+        else if (a == "--chan")
+        {
+            const std::string v = next();
+            int ch = 0, b = 0, sc = 0, nt = 0;
+            char tail = 0;
+            if (std::sscanf (v.c_str(), "%d=%d,%d,%d%c", &ch, &b, &sc, &nt, &tail) != 4 || ch < 1 || ch > smr::kNumChannels
+                || b < 0 || b >= smr::kNumScaleBanks || sc < 0 || sc >= smr::kNumScales || nt < 0 || nt >= smr::kNumFilts)
+            { std::fputs ("error: --chan CH=BANK,SCALE,NOTE with CH 1..6, BANK 0..19, SCALE 0..10, NOTE 0..19\n", stderr); return 2; }
+            cfg.chanSet[ch - 1] = true; cfg.chanBank[ch - 1] = b; cfg.chanScale[ch - 1] = sc; cfg.chanNote[ch - 1] = nt;
+        }
+        else if (a == "--trackoffset")
+        {
+            const std::string v = next();
+            int n = 0, o = 0;
+            char tail = 0;
+            if (std::sscanf (v.c_str(), "%d=%d%c", &n, &o, &tail) != 2 || n < 0 || n > 1 || o < -2000 || o > 2000)
+            { std::fputs ("error: --trackoffset N=V with N 0 or 1 and V -2000..2000\n", stderr); return 2; }
+            cfg.trackSet[n] = true; cfg.trackOffset[n] = o;
+        }
+        else if (a == "--gain-db") cfg.gainDb = std::atof (next().c_str());
         else if (a == "--freqblock") cfg.freqblock = (uint32_t) std::strtoul (next().c_str(), nullptr, 0);
         else if (a == "--script") cfg.script = next();
         else if (a == "--block") { cfg.block = std::atoi (next().c_str()); if (cfg.block < 1 || cfg.block > 8192) { std::fputs ("error: --block 1..8192\n", stderr); return 2; } }
@@ -205,9 +235,21 @@ int main (int argc, char** argv)
     smr::Controls ctl = cfg.ctl;
     e.setControls (ctl);
     ad.reset();   // boot with these controls
+    bool anyChan = false;
+    for (int i = 0; i < smr::kNumChannels; ++i) anyChan = anyChan || cfg.chanSet[i];
+    if (anyChan)
+    {
+        // Same path as the firmware loading a saved bank (system_mode.c load_params_from_sram), through Engine::loadSnapshot.
+        // Done before the mode and type options below, because loadSnapshot also applies the filter type.
+        smr::Snapshot snap = e.saveSnapshot();
+        for (int i = 0; i < smr::kNumChannels; ++i)
+            if (cfg.chanSet[i]) { snap.scale_bank[i] = (uint8_t) cfg.chanBank[i]; snap.scale[i] = (uint8_t) cfg.chanScale[i]; snap.note[i] = (uint8_t) cfg.chanNote[i]; }
+        if (! e.loadSnapshot (snap)) { std::fputs ("error: --chan values rejected by Engine::loadSnapshot\n", stderr); return 1; }
+    }
+    for (int n = 0; n < 2; ++n) if (cfg.trackSet[n]) e.trackoffset[n] = (int16_t) cfg.trackOffset[n];
     if (cfg.mode) e.setFilterMode (cfg.mode == 3 ? smr::ONEPASS : smr::TWOPASS);
     if (cfg.type) e.changeFilterType (cfg.type == 1 ? smr::BPRE : smr::MAXQ);
-    if (cfg.bank >= 0) for (int i = 0; i < smr::kNumChannels; ++i) e.scale_bank[i] = (uint8_t) cfg.bank;
+    if (cfg.bank >= 0) for (int i = 0; i < smr::kNumChannels; ++i) if (! cfg.chanSet[i]) e.scale_bank[i] = (uint8_t) cfg.bank;
     if (cfg.freqblock && ! e.setFreqBlock (cfg.freqblock)) { std::fputs ("error: --freqblock must be below bit 20 with at most 14 bits set\n", stderr); return 1; }
 
     const size_t inFrames = in.frames();
@@ -221,6 +263,7 @@ int main (int argc, char** argv)
     out.channels = 2;
     out.data.reserve ((total - latency) * 2);
 
+    const float inGain = (float) std::pow (10.0, cfg.gainDb / 20.0);
     size_t evIdx = 0;
     for (size_t pos = 0; pos < total; pos += (size_t) cfg.block)
     {
@@ -233,8 +276,8 @@ int main (int argc, char** argv)
             const size_t fr = pos + (size_t) k;
             if (fr < inFrames)
             {
-                inL[(size_t) k] = in.data[fr * (size_t) in.channels];
-                inR[(size_t) k] = in.data[fr * (size_t) in.channels + (size_t) (in.channels - 1)];
+                inL[(size_t) k] = in.data[fr * (size_t) in.channels] * inGain;
+                inR[(size_t) k] = in.data[fr * (size_t) in.channels + (size_t) (in.channels - 1)] * inGain;
             }
             else inL[(size_t) k] = inR[(size_t) k] = 0.0f;
         }
@@ -257,5 +300,12 @@ int main (int argc, char** argv)
     std::printf ("  output peak %.6f (%.2f dBFS), audio saturation events %llu, search-loop guard trips %llu\n", (double) peak,
                  peak > 0.0f ? 20.0 * std::log10 ((double) peak) : -999.0, (unsigned long long) e.saturation_count,
                  (unsigned long long) e.loop_guard_trips);
+    std::printf ("  final state per channel (1..6): bank");
+    for (int i = 0; i < smr::kNumChannels; ++i) std::printf (" %d", (int) e.scale_bank[i]);
+    std::printf (", scale");
+    for (int i = 0; i < smr::kNumChannels; ++i) std::printf (" %d", (int) e.scale[i]);
+    std::printf (", note");
+    for (int i = 0; i < smr::kNumChannels; ++i) std::printf (" %d", (int) e.note[i]);
+    std::printf ("; input gain %.2f dB, trackoffset %d %d\n", cfg.gainDb, (int) e.trackoffset[0], (int) e.trackoffset[1]);
     return 0;
 }
