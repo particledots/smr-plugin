@@ -8,3 +8,4 @@ dist/
 recordings/
 *.wav
 !tests/data/*.wav
+__pycache__/
