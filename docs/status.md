@@ -51,9 +51,9 @@ Bryn's renderer test, 2026-10-25:
 
 Note: CI logs cannot be downloaded in Claude's session (HTTP 403). The workflow writes results as annotations.
 
-## Milestone 3: Hardware reference. DEFERRED by Bryn, 2026-10-25 (not started, no code written)
+## Milestone 3: Hardware reference. IN PROGRESS: capture-1 recorded, measurement tool CI green, comparison with the port NOT started
 
-Bryn decided to move on to Milestone 4 and do the hardware capture later. The capture is needed before Milestone 5 (plugin DSP match) can be confirmed. Until then fidelity against the real SMR is unconfirmed.
+Bryn first deferred the capture (2026-10-25), then recorded it on 2026-10-26 (release capture-1). The capture is needed before Milestone 5 (plugin DSP match) can be confirmed. Until the comparison is done, fidelity against the real SMR is unconfirmed.
 
 Agreed so far, for when the capture is done:
 - Recording happens on one Mac next to the SMR, with Bryn's Focusrite Scarlett 2i2 (3rd Gen). Line input max +22 dBu at minimum gain, line output max +15.5 dBu at 0 dBFS, up to 192 kHz (Focusrite product page; DC coupling not stated, so treat as AC coupled: no Env Out CV capture).
@@ -64,6 +64,26 @@ Agreed so far, for when the capture is done:
 - Tier B (needs a CV source Bryn has not identified): Env Out (DC-coupled input needed), Scale CV step, Q CV, locked-channel Freq jack, Freq jack step response.
 
 Placeholders that stay until the capture: output mapping (M1-m), level scale (M1-n), core rate constant (M2-b), main-loop rate (M2-c). Each is a single constant or mapping in the code.
+
+### Capture 1: what was recorded and what the tool measured (2026-10-26)
+
+Recorded by Bryn on the M4 mac mini, Scarlett 2i2 3rd Gen, cable in the LEFT output (the first attempt used RIGHT and was redone). Release `capture-1`, asset `SMRCapture.zip`, 233,152,665 bytes, sha256 `996aab32...ede291`. 14 WAV files (P0 to P4, both jacks), 96 kHz, 24-bit, mono, none clipped, none silent. P5 (loopback) was NOT recorded (it was marked optional). The SMR clip LED never lit (Bryn). Panel photos not seen by Claude. Bank and scale were "left as loaded" and are not yet identified in the source tables.
+
+Confirmed by CI (commit 9e18c5d, workflow `analysis.yml`):
+- Self-test of `tools/analysis` on fake recordings with known answers: 37 of 37 checks passed (run 40451981714). It validates the tool only; it says nothing about the SMR.
+- Analysis of the real asset: run 40452093561, job analyse-capture, results as annotations (JSON kept as artifact `capture-analysis-result`). Measured values below are from that run.
+
+| Item | Measured |
+|---|---|
+| Output mapping (M1-m) | Slider 1 leaves by the ODDS jack (jack levels -26.4 vs -92.4 dBFS rms), slider 2 by the EVENS jack (-92.8 vs -28.8). Assumes cabling and Logic inputs as the capture sheet says (Bryn confirmed both). Differs from manual and source: see M3-a. |
+| Resonances, Q max (P3c) | Odds jack 218.674, 437.413, 874.966 Hz. Evens jack 408.682, 523.167, 1046.512 Hz. Full width at half power 0.46 to 0.62 Hz. |
+| Resonances, rotate 10 (P4, Q max) | Odds jack 27.332, 7061.334, 14539.826 Hz. Evens jack 32.697, 13515.131, 17717.008 Hz. |
+| Resonances, Q mid (P3b) | Same frequencies as P3c, full width 1.13 to 1.31 Hz. P3b and P3c frequencies agree within 0.14 cent (informal check). |
+| Q min (P3a) | No distinct per-channel peaks (broad overlapping response); not measured per channel. |
+| Noise source, nothing patched (P0) | rms -36.5 dBFS (odds) and -36.3 dBFS (evens), correlation between the jacks 0.809. |
+| Level steps | Only the top 2 to 4 steps are 10 dB above the floor; statistical uncertainty of each step 0.08 to 1.8 dB (1 sigma). |
+
+The hardware is not at the source default scale (65.40 to 130.80 Hz, M1-r). Not yet done: identify the bank and scale, render the port at the same settings, compare. M1-n (absolute level) stays open without P5. M2-b (96,000 versus 95,982 Hz) and M2-c cannot be judged until the port is rendered at the hardware's scale. Details and decisions needed: docs/open-questions.md M3-a to M3-f. Method and assumptions: tools/analysis/README.md.
 
 ## Milestone 4: Parameter layer and audio wiring (code written, NOT yet confirmed)
 

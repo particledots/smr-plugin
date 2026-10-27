@@ -245,3 +245,14 @@ Decisions Bryn approved: D1 wire the core into the plugin audio path in this ver
 - **M4-j Level CV default.** Level CV parameters default to 100% (assumes the jack is normalled high, which the manual does not state). M3 to confirm.
 - **M4-k Trigger parameters.** Rotate CW/CCW, Scale Up/Down act on the rising edge (off to on). In the generic editor, switch on, then off again. Not applied on load.
 - **M4-l Not in this milestone.** Env Out outputs, lock hold gestures, Q lock, coarse tuning, lock jacks, 1V/oct env mode, forbidden-notes UI (M7); user-scale editing is not ported.
+
+## Milestone 3 (hardware capture 1): findings for you to decide
+
+Numbers are from CI run 40452093561 (commit 9e18c5d); method in tools/analysis/README.md.
+
+- **M3-a Output mapping, hardware against manual and source.** Manual ("Controls and Jacks") and source (`filter.c`, docs/architecture.md 3.1): channels 1,3,5 leave by the EVENS OUT jack. Measured: with only slider 1 up the signal is on the ODDS OUT jack (-26.4 dBFS rms against -92.4 on the evens jack); with only slider 2 up it is on the EVENS OUT jack (-28.8 against -92.8). Assumes SMR OUT odds to Scarlett input 1 and OUT evens to input 2, and Logic tracks on those inputs (Bryn confirmed both). Not yet explained: the hardware may differ from the manual and source, or slider numbering may differ from channel numbering. The port still follows the source (M1-m). **Decision needed**, and a one-line check by Bryn (is the slider that was up the leftmost one?) would help.
+- **M3-b The impulses in `smr_sig_main.wav` are unusable.** Their rings are below the SMR's own noise floor (about -60 dBFS at Q max). The analysis uses the steady noise instead (H = output / input). Nothing to decide; a future capture could use a louder or longer excitation if impulses are wanted.
+- **M3-c Q min has no distinct per-channel peaks.** The six Q min bands overlap. Comparing the port at Q min must use the whole response, not per-resonance numbers.
+- **M3-d Tolerance consequence.** The noise steps cannot check a 0.5 dB gain tolerance: each step is uncertain by 0.08 to 1.8 dB (1 sigma). Proposal: apply the 0.5 dB gain tolerance to the peak gain and shape of H(f) (P3b, P3c, P4, and the whole Q min response), where the same input drives hardware and port. The 1 cent and 10% tolerances stay as agreed until the comparison shows whether they are realistic. **To be agreed.**
+- **M3-e P5 (loopback) not recorded.** The absolute level (M1-n, plugin 0 dBFS against module volts) stays unknown, and peak gains include the Scarlett's own gain. P5 takes about 5 minutes and can be added later as capture-2.
+- **M3-f The hardware scale is not the source default.** Q max peaks: odds jack 218.674, 437.413, 874.966 Hz; evens jack 408.682, 523.167, 1046.512 Hz. Which bank and scale give these is not yet identified (next step).
