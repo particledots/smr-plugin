@@ -387,19 +387,20 @@ Everything numeric is tied to 96 kHz: the coefficient tables (`// 96000`), the d
 terms (`twopass_calibration.h`, `filter.c` `ratio_b`), the 16-sample block, and the timers above.
 `globals.h` defines `SAMPLERATE 96000` with a comment that other values are for debugging only. Running
 the core at another rate would change pitch, decay time and level. So the core is fixed and the host
-rate is converted at the boundary. Core rate is one constant (`kCoreRate`, nominal 96000, see M2-b).
+rate is converted at the boundary. Core rate is one constant (`kCoreRateNum`/`kCoreRateDen` in `Constants.h`, now 671875/7 = 95,982.14 Hz, see M2-b).
 
 ### 12.2 Design
-- Host rate equals core rate (96000): no conversion; only the 16-frame block adapter. This path is
-  bit-exact and is the one used for the hardware comparisons in Milestones 3 and 5.
+- Host rate equals core rate (96000): no conversion; only the 16-frame block adapter. The core rate is now
+  95,982.14 Hz (M2-b, decided 2026-10-26), so a 96000 Hz host rate goes through the resampler (ratio 5375/5376); the
+  one-to-one path (`BlockAdapter::prepareOneToOne`, `smr_render --core-rate`) is used for hardware comparisons.
 - Otherwise: linear-phase polyphase FIR resampler, host to core on the way in and core to host on the
   way out, in `src/host` (plain C++, no JUCE). Fixed latency, reported to the host (Milestone 5).
 - Block adapter: collects input frames until 16 are available, runs one core block, queues the
   output. Fixed pre-roll of one block (16 core frames, 167 us) so the output never underruns; that
   adds to the reported latency. Host buffer sizes of any length work (1 to thousands).
-- Rational ratios for exact polyphase: 44100 is 320/147, 48000 is 2/1, 88200 is 160/147, 176400 is
-  80/147, 192000 is 1/2, 32000 is 3/1, 22050 is 640/147. Other host rates and `kCoreRate` =
-  95,982.14 need an arbitrary-ratio path (interpolated filter table). Milestone 2's offline
+- Rational ratios for exact polyphase at the core rate 671875/7 (`ratioToCore`): 96000 is 5375/5376, 48000 is
+  5375/2688, 44100 is 26875/12348, 88200 is 26875/24696, 192000 is 5375/10752 (the table has taps x up entries, up to
+  26875). Host rates whose reduced `up` exceeds 30000 need an arbitrary-ratio path (interpolated filter table). Milestone 2's offline
   renderer supports only the exact list above and says so for other files; the real-time path in
   Milestone 5 handles any rate.
 - Resampler quality targets (passband ripple, stopband attenuation, latency) are my design choices,

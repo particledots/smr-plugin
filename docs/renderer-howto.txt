@@ -17,7 +17,7 @@ and writes a new WAV. It is a command-line tool, not a plugin.
 4. All options:   ./smr_render --help
 
 The output is a 32-bit float stereo WAV at the same sample rate as the input.
-Supported input sample rates: 22050 32000 44100 48000 88200 96000 176400 192000 (96000 is bit-exact; the others use a resampler).
+Supported input sample rates: 22050 32000 44100 48000 88200 96000 176400 192000 (all use a resampler to the core rate 95,982.14 Hz; for a 96000 Hz file, --core-rate 671875/7 or 96000/1 skips the resampler and processes it one-to-one).
 Mono or stereo input, 8/16/24/32-bit PCM or float.
 
 The line "audio saturation events" in the summary should normally be 0.

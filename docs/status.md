@@ -122,6 +122,20 @@ How it was measured: `smr_render --core-rate 671875/7` runs the core's tick sche
 Not confirmed: the cause of the Q max widths; whether the odds offset is calibration or ADC; the de-emphasis time constants; the absolute level (M1-n).
 Note: in run 40457983850 the Q-fit annotation was cut off at the annotation size limit; `port_fit.py` now writes one annotation per pass and run 40458555879 gave the full P3c lines.
 
+### Fourth part: core rate 95,982.14 Hz, noise test for the Q max widths (CI run 40461296803 analysis and 40461296936 build, commit 9110ee9)
+
+Bryn's answers (2026-10-26): core rate to 95,982.14 Hz: yes; keep trackoffset default 0, use 15 only in comparisons: yes; codec de-emphasis in Phase 1: "yes, if you recommend" (my recommendation: later, see M3-i).
+
+Changed (`src/core` and `src/host` only, not `src/plugin`): `Constants.h` core rate 671875/7; `Resampler.h` `ratioToCore` limit 30000; `BlockAdapter` gets `prepareOneToOne`; `smr_render --core-rate` uses it; tests updated. `CMakeLists.txt` has the option `SMR_FP_CONTRACT`.
+
+CI confirmed (all jobs success): build-macos, core-macos, oracle-linux, analysis-selftest, analyse-capture, port-fit, compare-port, port-noise. `smr_core_tests` 64 checks and `smr_param_tests` 93 checks pass on arm64 and x86-64. V4: identical fixed-render hash on arm64 and x86-64, new value **fee74c946b3031c0** (was 7f50d4657b6d1e1c; changed because the rate changed). V6 controls and script render at 44100, 48000 and 96000 Hz, mono and stereo: PASS.
+
+Default (resampled) path against capture-1, trackoffset 15: frequencies 18 of 18 inside 1 cent (odds mean +0.03 cent, evens -0.06); widths 6 of 18 inside 10 % (at the nominal Q counts 2048 and 4095); gain 4 of 18 (the high-frequency tilt, M3-i, and Q max). Same numbers within 0.1 cent as the one-to-one render.
+
+M3-k (Q max widths): see open-questions.md M3-k for the findings. Short form: Q-lock, firmware 5.0 vs 5.1.x and rounding are ruled out; the hardware width estimate is noise-limited on this recording; input noise at the measured floor level brings the port's Q max widths into the hardware range (rms z 1.17), but this is not confirmed as the cause and the Q count 1876 fit is not improved by it.
+
+Not confirmed: plugin load time and memory on the Macs with the larger resampler tables; the cause of the Q max widths.
+
 ## Milestone 4: Parameter layer and audio wiring (code written, NOT yet confirmed)
 
 Written: 41 parameters (`src/plugin/ParamMap.*`), saved state (`StateCodec.*`, `Engine` snapshot in `src/core/Snapshot.cpp`), core wired into the plugin through `BlockAdapter` (`PluginProcessor.cpp`), generic editor with status line. Decisions and findings: docs/open-questions.md M4-a to M4-l.
