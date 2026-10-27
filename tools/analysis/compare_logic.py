@@ -101,6 +101,15 @@ def compare_one(name, ref, x):
     swap = rel_db(b1 - r0, r0)
     lines.append("%s: lengths render %d, bounce %d; best lag of the bounce against the render %+d samples (right channel %+d). %s. Left against the bounce's right channel: %.1f dB."
                  % (name, len(ref), len(x), lag, lag1, "; ".join(out), swap))
+    # A mono plugin output (Logic mono-to-mono) carries both output slots summed (PluginProcessor.cpp processBlock, nOut == 1):
+    # a bounce with identical left and right channels is compared against the sum of the two render channels.
+    if len(x) and np.array_equal(x[:, 0], x[:, 1]):
+        mono = ref[:, 0].astype(np.float64) + ref[:, 1].astype(np.float64)
+        lagm = best_lag(mono, x[:, 0])
+        r, b = align(mono, x[:, 0].astype(np.float64), lagm)
+        g = float(np.dot(r, b) / max(float(np.dot(r, r)), 1e-300))
+        lines.append("%s: bounce left == right (mono output). Against the sum of the render's two channels: lag %+d samples, gain %+.3f dB, difference %.1f dB re signal (%.1f dB after fitting the gain), largest %.3g"
+                     % (name, lagm, 20 * np.log10(abs(g)) if g else float("nan"), rel_db(b - r, r), rel_db(b - g * r, r), float(np.max(np.abs(b - r))) if len(r) else 0.0))
     return lines
 
 
