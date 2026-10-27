@@ -37,10 +37,12 @@ namespace
         "  --freqblock MASK            blocked frequency positions, bit n = position n (at most 14 bits, below bit 20)\n"
         "  --script FILE               timed control changes, one per line: TIME_SECONDS adc N V | pot N V | sw NAME V |\n"
         "                              rotup | rotdown | lock135 | lock246 | bank B | mode M | type T   (# starts a comment)\n"
-        "  --core-rate NUM/DEN         run the core's tick scheduler at NUM/DEN Hz instead of 96000 (open question M2-b, e.g. 671875/7 = 95982.142857 Hz).\n"
+        "  --core-rate NUM/DEN         run the core's tick scheduler at NUM/DEN Hz instead of the built-in core rate 671875/7 = 95982.142857 Hz\n"
+        "                              (open question M2-b; the built-in rate is the hardware's, decided by Bryn on 2026-10-26; 96000/1 is the nominal rate).\n"
         "                              The file must be 96000 Hz and is processed sample for sample, no resampling: the file's own time axis is\n"
         "                              then read as if its rate were NUM/DEN, so every frequency in OUT.wav is NUM/DEN/96000 times what a 96000 Hz\n"
         "                              reading says. Only the scheduler timing changes; the audio filters are the same.\n"
+        "                              Without --core-rate the file is resampled between its rate and the built-in core rate (frequencies in OUT.wav are then true Hz).\n"
         "  --block N                   host block size in frames (default 64)\n"
         "  --tail SECONDS              extra time rendered after the input ends (default 2)\n"
         "  --no-compensate             keep the start-up latency instead of trimming it\n"
@@ -237,13 +239,6 @@ int main (int argc, char** argv)
     if (! wav::read (inPath, in, err)) { std::fprintf (stderr, "error: %s: %s\n", inPath, err.c_str()); return 1; }
 
     smr_host::BlockAdapter ad;
-    if (! ad.prepare (in.rate, cfg.block))
-    {
-        std::fprintf (stderr, "error: sample rate %d Hz is not in the exact-ratio list (22050 32000 44100 48000 88200 96000 176400 192000). "
-                              "Convert the file to one of these rates first.\n", in.rate);
-        return 1;
-    }
-
     if (cfg.coreNum)
     {
         if (in.rate != 96000)
@@ -251,7 +246,14 @@ int main (int argc, char** argv)
             std::fputs ("error: --core-rate needs a 96000 Hz input file (it is processed without resampling)\n", stderr);
             return 1;
         }
+        ad.prepareOneToOne (in.rate, cfg.block);   // file taken as already at the core rate: block adapter only, no resampler
         ad.engine().scheduler = smr::Scheduler ((uint64_t) cfg.coreNum, (uint64_t) cfg.coreDen);   // before ad.reset(), which resets the scheduler
+    }
+    else if (! ad.prepare (in.rate, cfg.block))
+    {
+        std::fprintf (stderr, "error: sample rate %d Hz is not in the exact-ratio list (22050 32000 44100 48000 88200 96000 176400 192000). "
+                              "Convert the file to one of these rates first.\n", in.rate);
+        return 1;
     }
 
     std::vector<Event> events;

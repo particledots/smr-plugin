@@ -40,11 +40,14 @@ namespace smr
     constexpr int kExpTableSize  = 4096;
     constexpr int kTwopassCalSize = 3380;
 
-    // Core sample rate (decision M2-a/M2-b: the nominal 96000 Hz, held in one place).
-    // The rate is the rational kCoreRateNum / kCoreRateDen so a different rate can be
-    // set later without floating-point drift in the tick scheduler.
-    constexpr uint64_t kCoreRateNum = 96000;
-    constexpr uint64_t kCoreRateDen = 1;
+    // Core sample rate, held in one place. Bryn decided on 2026-10-26 to use the hardware's I2S rate
+    // 671875/7 = 95,982.142857 Hz (docs/open-questions.md M2-b: computed from PLLI2S_N 344 and PLLI2S_R 2 in
+    // system_stm32f4xx.c and I2S_Init in stm32f4xx_spi.c; matched by capture-1 within 0.1 cent on the evens jack, CI run 40457983850).
+    // The coefficient tables and decay constants stay those of the firmware (written for 96000 Hz): only the clock changes.
+    // Before this decision the value was the nominal 96000 / 1.
+    // The rate is the rational kCoreRateNum / kCoreRateDen so it has no floating-point drift in the tick scheduler.
+    constexpr uint64_t kCoreRateNum = 671875;
+    constexpr uint64_t kCoreRateDen = 7;
 
     // Timer clock for TIM9 and TIM10 (docs/architecture.md section 11.2, derived).
     constexpr uint64_t kTimerClockHz = 168000000ULL;

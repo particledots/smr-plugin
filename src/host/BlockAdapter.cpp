@@ -26,13 +26,24 @@ namespace smr_host
         prepared_ = false;
         int up = 1, down = 1;
         if (! ratioToCore (hostRate, up, down) || maxHostBlock < 1) return false;
+        return prepareWith (hostRate, maxHostBlock, up, down, (double) smr::kCoreRateNum / (double) smr::kCoreRateDen);
+    }
 
+    bool BlockAdapter::prepareOneToOne (int rate, int maxHostBlock)
+    {
+        prepared_ = false;
+        if (rate <= 0 || maxHostBlock < 1) return false;
+        return prepareWith (rate, maxHostBlock, 1, 1, (double) rate);
+    }
+
+    bool BlockAdapter::prepareWith (int hostRate, int maxHostBlock, int up, int down, double coreRate)
+    {
         up_ = up;
         down_ = down;
         hostRate_ = hostRate;
         maxHostBlock_ = maxHostBlock;
+        coreRate_ = coreRate;
 
-        const double coreRate = (double) smr::kCoreRateNum / (double) smr::kCoreRateDen;
         if (! engine_) engine_.reset (new smr::Engine());
 
         // worst-case queue sizes
@@ -66,7 +77,7 @@ namespace smr_host
             c.nCoreOut = smr::kBlockFrames;                 // pre-roll: one block of silence (docs/architecture.md 12.2)
             std::fill (c.coreOut.begin(), c.coreOut.end(), 0.0f);
             // Guard frames (not bypass): the resampler's output count can lag its input by one sample, so two zero host
-            // frames are queued in addition to the one-block pre-roll. In the bit-exact 96 kHz path there is no guard.
+            // frames are queued in addition to the one-block pre-roll. In the one-to-one path there is no guard.
             c.nHostOut = (up_ == 1 && down_ == 1) ? 0 : kGuardHostFrames;
             std::fill (c.hostOut.begin(), c.hostOut.end(), 0.0f);
         }
@@ -77,7 +88,7 @@ namespace smr_host
     double BlockAdapter::latencyHostFrames() const
     {
         if (! prepared_) return 0.0;
-        const double coreRate = (double) smr::kCoreRateNum / (double) smr::kCoreRateDen;
+        const double coreRate = coreRate_;
         const double toCoreCoreFrames = ch_[0].toCore.latencyOutputSamples();            // in core frames
         const double toHostHostFrames = ch_[0].toHost.latencyOutputSamples();            // in host frames
         const double preRollHostFrames = (double) smr::kBlockFrames * (double) hostRate_ / coreRate;

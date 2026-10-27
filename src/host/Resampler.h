@@ -11,7 +11,10 @@ namespace smr_host
     // Reduced ratio for converting hostRate to the core rate (kCoreRateNum / kCoreRateDen), as in docs/architecture.md 12.2.
     // Returns false if hostRate is not an integer whose reduced ratio has up <= maxUp (then the arbitrary-ratio path of
     // Milestone 5 is needed). up == down == 1 means "no conversion".
-    bool ratioToCore (int hostRate, int& up, int& down, int maxUp = 1000);
+    // maxUp is 30000 since the core rate became 671875/7 Hz (M2-b): the reduced ratios are then 5375/5376 (96000 Hz),
+    // 5375/2688 (48000), 26875/12348 (44100), 26875/24696 (88200), 5375/10752 (192000) and so on, the largest being 26875.
+    // Cost: the coefficient table has taps x up entries (32 x 26875 floats = 3.4 MB for 44100 Hz); the work per output sample stays 32 multiply-adds.
+    bool ratioToCore (int hostRate, int& up, int& down, int maxUp = 30000);
 
     class Resampler
     {

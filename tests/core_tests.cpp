@@ -97,7 +97,7 @@ namespace
     // Scheduler: exact tick counts over a second of blocks
     void testScheduler()
     {
-        smr::Scheduler s;
+        smr::Scheduler s (96000, 1);   // explicit nominal rate: the built-in default is now 671875/7 (M2-b)
         uint64_t t9 = 0, t10 = 0, tl = 0;
         for (int i = 0; i < 6000; ++i)   // 6000 blocks of 16 frames at 96 kHz = exactly 1 s
         {
@@ -118,6 +118,17 @@ namespace
         const uint64_t expect = (uint64_t) 6000 * 16 * 168000000ull * 7 / 671875 / 8196;
         std::snprintf (msg, sizeof msg, "TIM10 %llu (expect %llu)", (unsigned long long) u10, (unsigned long long) expect);
         check (u10 == expect, "scheduler: exact for a non-integer core rate", msg);
+
+        // The built-in default is the hardware rate 671875/7 (decision of 2026-10-26): same counts as s2 over 6000 blocks, all three kinds.
+        smr::Scheduler s3;
+        smr::Scheduler s4 (671875, 7);
+        bool same = true;
+        for (int i = 0; i < 6000; ++i)
+        {
+            const smr::DueTicks a = s3.advanceOneBlock(), b = s4.advanceOneBlock();
+            same = same && a.tim9 == b.tim9 && a.tim10 == b.tim10 && a.loop == b.loop;
+        }
+        check (same && smr::kCoreRateNum == 671875 && smr::kCoreRateDen == 7, "scheduler: the default constructor uses the core rate 671875/7");
     }
 
     // ---------------------------------------------------------------------------------------------------------
@@ -351,7 +362,7 @@ namespace
     }
 
     // ---------------------------------------------------------------------------------------------------------
-    // Adapter: block-size independence, bit-exact at 96 kHz, no underruns, and resampler round trip
+    // Adapter: block-size independence, bit-exact one-to-one path, no underruns, and resampler round trip
     std::vector<float> renderAdapter (int hostRate, int chunk, int frames, uint64_t& underruns)
     {
         smr_host::BlockAdapter ad;
@@ -399,18 +410,29 @@ namespace
             check (uAll == 0, name, detail);
         }
 
-        // 96 kHz: bit-exact against the core run directly, delayed by the one-block pre-roll
+        // One-to-one path (no resampler; used by smr_render --core-rate): bit-exact against the core run directly,
+        // delayed by the one-block pre-roll. At the real core rate no integer host rate is equal to it, so this is the only exact path.
         {
             const int frames = 96000 / 4;
-            uint64_t u = 0;
-            const std::vector<float> viaAdapter = renderAdapter (96000, 33, frames, u);
+            smr_host::BlockAdapter ad;
+            check (ad.prepareOneToOne (96000, 8192), "adapter one-to-one prepares");
+            ad.engine().setControls (defaultControls());
+            ad.reset();
+            std::vector<float> in ((size_t) frames), viaAdapter ((size_t) frames * 2, 0.0f);
+            Lcg g;
+            for (auto& v : in) v = (float) ((int32_t) g.next() >> 8) / 8388608.0f * 0.1f;
+            std::vector<float> oL (33), oR (33);
+            for (int pos = 0; pos < frames; pos += 33)
+            {
+                const int n = 33 < frames - pos ? 33 : frames - pos;
+                ad.process (&in[(size_t) pos], nullptr, oL.data(), oR.data(), n);
+                for (int k = 0; k < n; ++k) { viaAdapter[(size_t) (pos + k) * 2] = oL[(size_t) k]; viaAdapter[(size_t) (pos + k) * 2 + 1] = oR[(size_t) k]; }
+            }
 
             std::unique_ptr<smr::Engine> e (new smr::Engine());
             e->setControls (defaultControls());
             e->reset();
-            std::vector<float> in ((size_t) frames), direct ((size_t) frames * 2, 0.0f);
-            Lcg g;
-            for (auto& v : in) v = (float) ((int32_t) g.next() >> 8) / 8388608.0f * 0.1f;
+            std::vector<float> direct ((size_t) frames * 2, 0.0f);
             const float fs = 2147483520.0f;
             for (int pos = 0; pos + 16 <= frames; pos += 16)
             {
@@ -421,7 +443,7 @@ namespace
                     if (pos + 16 + k < frames) { direct[(size_t) (pos + 16 + k) * 2] = (float) oa[k] / fs; direct[(size_t) (pos + 16 + k) * 2 + 1] = (float) ob[k] / fs; }
             }
             check (std::memcmp (viaAdapter.data(), direct.data(), direct.size() * sizeof (float)) == 0,
-                   "adapter at 96 kHz equals the core run directly, delayed by exactly 16 frames (bit-exact)");
+                   "adapter one-to-one equals the core run directly, delayed by exactly 16 frames (bit-exact)");
         }
     }
 
@@ -437,7 +459,7 @@ namespace
                 int up = 1, down = 1;
                 smr_host::ratioToCore (rate, up, down);
                 smr_host::Resampler a, b;
-                const double coreRate = 96000.0;
+                const double coreRate = (double) smr::kCoreRateNum / (double) smr::kCoreRateDen;
                 a.prepare (up, down, rate, coreRate);
                 b.prepare (down, up, coreRate, rate);
                 const double lat = a.latencyOutputSamples() * rate / coreRate + b.latencyOutputSamples();   // host frames
@@ -459,17 +481,19 @@ namespace
                     maxErr = std::fmax (maxErr, std::fabs ((double) y[(size_t) i] - ref));
                 }
                 char name[128], detail[64];
-                std::snprintf (name, sizeof name, "resampler round trip %d -> 96000 -> %d Hz, %.0f Hz sine, delay-aligned", rate, rate, freq);
+                std::snprintf (name, sizeof name, "resampler round trip %d -> core rate 95982.14 -> %d Hz, %.0f Hz sine, delay-aligned", rate, rate, freq);
                 std::snprintf (detail, sizeof detail, "max error %.2e, latency %.2f frames", maxErr, lat);
                 check (maxErr < 2e-3, name, detail);
             }
 
         int up = 0, down = 0;
         check (! smr_host::ratioToCore (47999, up, down), "ratioToCore rejects a rate that needs the arbitrary-ratio path (47999 Hz)");
-        check (smr_host::ratioToCore (44100, up, down) && up == 320 && down == 147, "ratioToCore: 44100 Hz is 320/147");
-        check (smr_host::ratioToCore (48000, up, down) && up == 2 && down == 1, "ratioToCore: 48000 Hz is 2/1");
-        check (smr_host::ratioToCore (22050, up, down) && up == 640 && down == 147, "ratioToCore: 22050 Hz is 640/147");
-        check (smr_host::ratioToCore (192000, up, down) && up == 1 && down == 2, "ratioToCore: 192000 Hz is 1/2");
+        // core rate 671875/7 Hz: ratio = 671875 / (7 x host rate), reduced
+        check (smr_host::ratioToCore (44100, up, down) && up == 26875 && down == 12348, "ratioToCore: 44100 Hz is 26875/12348");
+        check (smr_host::ratioToCore (48000, up, down) && up == 5375 && down == 2688, "ratioToCore: 48000 Hz is 5375/2688");
+        check (smr_host::ratioToCore (96000, up, down) && up == 5375 && down == 5376, "ratioToCore: 96000 Hz is 5375/5376");
+        check (smr_host::ratioToCore (22050, up, down) && up == 26875 && down == 6174, "ratioToCore: 22050 Hz is 26875/6174");
+        check (smr_host::ratioToCore (192000, up, down) && up == 5375 && down == 10752, "ratioToCore: 192000 Hz is 5375/10752");
     }
 
     // ---------------------------------------------------------------------------------------------------------

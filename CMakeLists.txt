@@ -11,6 +11,14 @@ project(UnofficialSMR VERSION 0.0.4 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# SMR_FP_CONTRACT: "off" for every real build. "fast" is only for the M3-k rounding test (smr_render built with fused multiply-add allowed,
+# tools/analysis/port_noise.py): the V3 test fails in such a build, so never use it for the tests or the plugin.
+set(SMR_FP_CONTRACT "off" CACHE STRING "-ffp-contract mode for the core: off (default) or fast (M3-k experiment only)")
+set(SMR_FPFLAGS -ffp-contract=${SMR_FP_CONTRACT})
+if(SMR_FP_CONTRACT STREQUAL "fast" AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+  list(APPEND SMR_FPFLAGS -mfma)
+endif()
+
 # --- src/core: DSP only. Plain C++, no JUCE, no hardware code. ---
 # -ffp-contract=off: no fused multiply-add (Clang on arm64 and GCC would otherwise fuse). -O2: no -Ofast, no fast-math.
 # (docs/architecture.md section 13.3). PassThrough is the Milestone 0 stand-in that the plugin still uses.
@@ -28,7 +36,7 @@ add_library(smr_core STATIC
 target_include_directories(smr_core PUBLIC src/core)
 target_compile_features(smr_core PUBLIC cxx_std_17)
 if(NOT MSVC)
-  target_compile_options(smr_core PRIVATE -ffp-contract=off -O2)
+  target_compile_options(smr_core PRIVATE ${SMR_FPFLAGS} -O2)
   # The upstream table headers (included verbatim) fill nested arrays with flat brace lists.
   set_source_files_properties(src/core/Tables.cpp PROPERTIES COMPILE_OPTIONS "-Wno-missing-braces")
 endif()
@@ -39,7 +47,7 @@ add_library(smr_host STATIC src/host/Resampler.cpp src/host/BlockAdapter.cpp)
 target_include_directories(smr_host PUBLIC src/host)
 target_link_libraries(smr_host PUBLIC smr_core)
 if(NOT MSVC)
-  target_compile_options(smr_host PRIVATE -ffp-contract=off -O2)
+  target_compile_options(smr_host PRIVATE ${SMR_FPFLAGS} -O2)
 endif()
 set_target_properties(smr_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
@@ -48,7 +56,7 @@ add_library(smr_params STATIC src/plugin/ParamMap.cpp src/plugin/StateCodec.cpp)
 target_include_directories(smr_params PUBLIC src/plugin)
 target_link_libraries(smr_params PUBLIC smr_core)
 if(NOT MSVC)
-  target_compile_options(smr_params PRIVATE -ffp-contract=off -O2)
+  target_compile_options(smr_params PRIVATE ${SMR_FPFLAGS} -O2)
 endif()
 set_target_properties(smr_params PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
@@ -57,7 +65,7 @@ set_target_properties(smr_params PROPERTIES POSITION_INDEPENDENT_CODE ON)
 function(smr_test_target name)
   add_executable(${name} EXCLUDE_FROM_ALL ${ARGN})
   if(NOT MSVC)
-    target_compile_options(${name} PRIVATE -ffp-contract=off -O2)
+    target_compile_options(${name} PRIVATE ${SMR_FPFLAGS} -O2)
   endif()
 endfunction()
 
