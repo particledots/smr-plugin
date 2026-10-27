@@ -281,6 +281,27 @@ jobs:
           echo "::notice::PARAM-TEST(plugin job) $(grep -E '^(PASS|FAIL): [0-9]+ checks' param_log.txt)"
           exit $code
 
+      - name: Build and run the Milestone 5 plugin tests (the real plugin code, headless; arm64 native, then x86_64 under Rosetta)
+        run: |
+          cmake --build build --target smr_plugin_tests -j4 > plugtest_build_log.txt 2>&1 || {
+            grep -E "error|Error" plugtest_build_log.txt | head -12 | cut -c1-400 | while IFS= read -r line; do echo "::error::BUILD(plugin tests): $line"; done
+            tail -20 plugtest_build_log.txt; exit 1; }
+          bin=$(find build -name smr_plugin_tests -type f -perm -u+x | head -1)
+          echo "binary: $bin"; lipo -archs "$bin"
+          fail=0
+          for a in arm64 x86_64; do
+            arch -$a "$bin" selftest > plugtest_$a.txt 2>&1; code=$?
+            [ $code -eq 0 ] || fail=1
+            echo "::group::plugin tests $a (exit $code)"; cat plugtest_$a.txt; echo "::endgroup::"
+            grep -E "^FAIL" plugtest_$a.txt | head -12 | cut -c1-600 | while IFS= read -r line; do echo "::error::PLUGIN-TEST($a): $line"; done
+            grep -E "^INFO" plugtest_$a.txt | head -40 | cut -c1-500 | while IFS= read -r line; do echo "::notice::PLUGIN-TEST($a): $line"; done
+            echo "::notice::PLUGIN-TEST($a) exit $code: $(grep -E '^(PASS|FAIL): [0-9]+ checks' plugtest_$a.txt)"
+          done
+          # Does the x86_64 run give the same samples as the arm64 run? The per-check lines carry sample counts and peaks, not hashes,
+          # so compare the PASS/FAIL lines only.
+          diff <(grep -E "^(PASS|FAIL)" plugtest_arm64.txt) <(grep -E "^(PASS|FAIL)" plugtest_x86_64.txt) > plugtest_arch_diff.txt && echo "::notice::PLUGIN-TEST arm64 and x86_64 give the same PASS/FAIL lines" || echo "::warning::PLUGIN-TEST arm64 and x86_64 differ: $(head -3 plugtest_arch_diff.txt | tr '\n' ' ' | cut -c1-400)"
+          exit $fail
+
       - name: Build AU + VST3
         run: |
           cmake --build build --target SMR_AU SMR_VST3 -j4 > plugin_build_log.txt 2>&1 || {

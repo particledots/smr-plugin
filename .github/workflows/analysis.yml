@@ -21,6 +21,8 @@ on:
       - 'tools/smr_render/**'
       - 'src/core/**'
       - 'src/host/**'
+      - 'src/plugin/**'
+      - 'tests/plugin_tests.cpp'
       - 'CMakeLists.txt'
       - '.github/workflows/analysis.yml'
   pull_request:
@@ -30,6 +32,8 @@ on:
       - 'tools/smr_render/**'
       - 'src/core/**'
       - 'src/host/**'
+      - 'src/plugin/**'
+      - 'tests/plugin_tests.cpp'
       - 'CMakeLists.txt'
       - '.github/workflows/analysis.yml'
   workflow_dispatch:
@@ -264,4 +268,63 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: port-noise-result
+          path: ${{ runner.temp }}/out/*.json
+
+  # Milestone 5: the real plugin code (JUCE processor, parameters, saved state, resampler, denormal flush) rendered through the capture-1
+  # passes at the identified state and measured by the same code as the hardware and the core. macOS, because the plugin needs JUCE.
+  compare-plugin:
+    needs: analysis-selftest
+    if: github.event_name != 'pull_request'
+    runs-on: macos-15
+    permissions:
+      contents: read
+    env:
+      CAPTURE_TAG: ${{ github.event.inputs.tag || 'capture-1' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install numpy and scipy
+        run: python -m pip install -r tools/analysis/requirements.txt
+
+      - name: Build smr_plugin_tests and smr_render (arm64)
+        run: |
+          cmake -S . -B build_pl -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 > cmake_log.txt 2>&1 || { tail -30 cmake_log.txt; echo "::error::cmake failed"; exit 1; }
+          cmake --build build_pl --target smr_plugin_tests smr_render -j4 > build_log.txt 2>&1 || {
+            grep -E "error|Error" build_log.txt | head -8 | cut -c1-400 | while IFS= read -r line; do echo "::error::BUILD: $line"; done
+            tail -20 build_log.txt; exit 1; }
+          echo "::notice::smr_plugin_tests and smr_render built"
+
+      - name: Download the capture from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/cap"
+          gh release download "$CAPTURE_TAG" --repo "${{ github.repository }}" --pattern 'SMRCapture.zip' --dir "$RUNNER_TEMP/cap"
+          unzip -q "$RUNNER_TEMP/cap/SMRCapture.zip" -x '__MACOSX/*' -d "$RUNNER_TEMP/cap/x"
+
+      - name: Plugin and core renders of the capture passes, compared with the hardware and with each other
+        run: |
+          d=$(find "$RUNNER_TEMP/cap/x" -type d -name SMRCapture | head -1)
+          [ -n "$d" ] || d="$RUNNER_TEMP/cap/x"
+          plug=$(find build_pl -name smr_plugin_tests -type f -perm -u+x | head -1)
+          mkdir -p "$RUNNER_TEMP/out"
+          # Plugin: default (resampled) path, odds Freq-jack offset emulated by the Freq (odds) parameter at ADC count 15.
+          python tools/analysis/port_passes.py --render "$plug" --outdir "$RUNNER_TEMP/plugin_offset" --variant offset
+          python tools/analysis/compare_port.py "$d" "$RUNNER_TEMP/plugin_offset" --label "plugin_offset_default_path" --json "$RUNNER_TEMP/out/compare_plugin_offset.json"
+          # Core through smr_render on the same path (block 512 like the plugin run), for the sample-by-sample difference.
+          python tools/analysis/port_passes.py --render build_pl/smr_render --outdir "$RUNNER_TEMP/core_offset" --variant offset
+          python tools/analysis/compare_port.py "$d" "$RUNNER_TEMP/core_offset" --label "core_offset_default_path_macOS" --json "$RUNNER_TEMP/out/compare_core_offset.json"
+          python tools/analysis/diff_renders.py "$RUNNER_TEMP/core_offset" "$RUNNER_TEMP/plugin_offset" --label "core (smr_render, trackoffset 15) against plugin (Freq odds ADC 15)"
+
+      - name: Keep the numbers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-comparison-result
           path: ${{ runner.temp }}/out/*.json

@@ -133,3 +133,24 @@ target_link_libraries(SMR PRIVATE
   juce::juce_audio_utils
   juce::juce_recommended_config_flags
   juce::juce_recommended_warning_flags)
+
+# --- Milestone 5: the real plugin code run headless (no host), for CI. Built on request only. ---
+# Compiles PluginProcessor.cpp and PluginEditor.cpp into a console app. Modes: "selftest" and WAV rendering (tests/plugin_tests.cpp).
+juce_add_console_app(smr_plugin_tests PRODUCT_NAME "smr_plugin_tests")
+target_sources(smr_plugin_tests PRIVATE
+  tests/plugin_tests.cpp
+  src/plugin/PluginProcessor.cpp
+  src/plugin/PluginEditor.cpp)
+target_include_directories(smr_plugin_tests PRIVATE src/plugin tools/smr_render)
+target_compile_definitions(smr_plugin_tests PRIVATE
+  JUCE_WEB_BROWSER=0
+  JUCE_USE_CURL=0
+  JucePlugin_Name="Unofficial SMR")
+target_link_libraries(smr_plugin_tests PRIVATE
+  smr_params
+  smr_host
+  smr_core
+  juce::juce_audio_utils
+  juce::juce_recommended_config_flags
+  juce::juce_recommended_warning_flags)
+set_target_properties(smr_plugin_tests PROPERTIES EXCLUDE_FROM_ALL ON)
