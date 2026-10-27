@@ -4,6 +4,8 @@ name: Capture analysis (Milestone 3)
 # Job 2 (only after job 1 passes, and not on pull requests): analyse the real hardware recordings attached to the
 # GitHub release tagged capture-1 (asset SMRCapture.zip).
 # Job 3 (after job 2): render the port at the identified settings and compare with the hardware (compare_port.py).
+# Job 4 (port-fit, after job 1): M2-b test (port at the hardware core rate 95,982.142857 Hz), odds Freq-jack offset sweep, Q fit, high-frequency tilt
+# (tools/analysis/port_fit.py).
 # Results appear as annotations on the run (CI logs cannot be downloaded in Claude's session).
 
 on:
@@ -137,4 +139,61 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: port-comparison-result
+          path: ${{ runner.temp }}/out/*.json
+
+  port-fit:
+    needs: analysis-selftest
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      CAPTURE_TAG: ${{ github.event.inputs.tag || 'capture-1' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install numpy and scipy
+        run: python -m pip install -r tools/analysis/requirements.txt
+
+      - name: Build smr_render (core only, GCC)
+        run: |
+          cmake -S . -B build_fit -DSMR_CORE_ONLY=ON -DCMAKE_BUILD_TYPE=Release > cmake_log.txt 2>&1 || { tail -30 cmake_log.txt; echo "::error::cmake failed"; exit 1; }
+          cmake --build build_fit --target smr_render -j4 > build_log.txt 2>&1 || { tail -40 build_log.txt; echo "::error::smr_render build failed: $(grep -m1 'error' build_log.txt | cut -c1-300)"; exit 1; }
+          echo "::notice::smr_render built"
+
+      - name: Download the capture from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/cap"
+          gh release download "$CAPTURE_TAG" --repo "${{ github.repository }}" --pattern 'SMRCapture.zip' --dir "$RUNNER_TEMP/cap"
+          unzip -q "$RUNNER_TEMP/cap/SMRCapture.zip" -x '__MACOSX/*' -d "$RUNNER_TEMP/cap/x"
+
+      - name: M2-b, port at the hardware core rate 671875/7 = 95982.142857 Hz (variants base and offset)
+        run: |
+          d=$(find "$RUNNER_TEMP/cap/x" -type d -name SMRCapture | head -1)
+          [ -n "$d" ] || d="$RUNNER_TEMP/cap/x"
+          mkdir -p "$RUNNER_TEMP/out"
+          for v in base offset; do
+            python tools/analysis/port_passes.py --render build_fit/smr_render --outdir "$RUNNER_TEMP/hwrate_$v" --variant $v --core-rate 671875/7
+            python tools/analysis/compare_port.py "$d" "$RUNNER_TEMP/hwrate_$v" --label "${v}_at_95982.14Hz" --port-rate 95982.142857143 --json "$RUNNER_TEMP/out/compare_hwrate_$v.json"
+          done
+
+      - name: Odds offset sweep, Q fit and high-frequency tilt (core rate 95982.142857 Hz)
+        run: |
+          d=$(find "$RUNNER_TEMP/cap/x" -type d -name SMRCapture | head -1)
+          [ -n "$d" ] || d="$RUNNER_TEMP/cap/x"
+          python tools/analysis/port_fit.py "$d" --render build_fit/smr_render --json "$RUNNER_TEMP/out/port_fit.json"
+
+      - name: Keep the numbers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: port-fit-result
           path: ${{ runner.temp }}/out/*.json

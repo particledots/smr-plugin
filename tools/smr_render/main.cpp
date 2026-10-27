@@ -37,6 +37,10 @@ namespace
         "  --freqblock MASK            blocked frequency positions, bit n = position n (at most 14 bits, below bit 20)\n"
         "  --script FILE               timed control changes, one per line: TIME_SECONDS adc N V | pot N V | sw NAME V |\n"
         "                              rotup | rotdown | lock135 | lock246 | bank B | mode M | type T   (# starts a comment)\n"
+        "  --core-rate NUM/DEN         run the core's tick scheduler at NUM/DEN Hz instead of 96000 (open question M2-b, e.g. 671875/7 = 95982.142857 Hz).\n"
+        "                              The file must be 96000 Hz and is processed sample for sample, no resampling: the file's own time axis is\n"
+        "                              then read as if its rate were NUM/DEN, so every frequency in OUT.wav is NUM/DEN/96000 times what a 96000 Hz\n"
+        "                              reading says. Only the scheduler timing changes; the audio filters are the same.\n"
         "  --block N                   host block size in frames (default 64)\n"
         "  --tail SECONDS              extra time rendered after the input ends (default 2)\n"
         "  --no-compensate             keep the start-up latency instead of trimming it\n"
@@ -56,6 +60,7 @@ namespace
         bool compensate = true;
         bool chanSet[smr::kNumChannels] = {};
         int chanBank[smr::kNumChannels] = {}, chanScale[smr::kNumChannels] = {}, chanNote[smr::kNumChannels] = {};
+        unsigned long long coreNum = 0, coreDen = 0;   // 0 = default core rate
         bool trackSet[2] = {};
         int trackOffset[2] = {};
         std::string script;
@@ -207,6 +212,17 @@ int main (int argc, char** argv)
             { std::fputs ("error: --trackoffset N=V with N 0 or 1 and V -2000..2000\n", stderr); return 2; }
             cfg.trackSet[n] = true; cfg.trackOffset[n] = o;
         }
+        else if (a == "--core-rate")
+        {
+            const std::string s = next();
+            const size_t sl = s.find ('/');
+            if (sl == std::string::npos) { std::fputs ("error: --core-rate NUM/DEN, for example 671875/7\n", stderr); return 2; }
+            cfg.coreNum = std::strtoull (s.substr (0, sl).c_str(), nullptr, 10);
+            cfg.coreDen = std::strtoull (s.substr (sl + 1).c_str(), nullptr, 10);
+            // The scheduler arithmetic is exact in 64 bits for rates up to a few hundred kHz (src/core/Scheduler.h); keep to 50000 to 200000 Hz.
+            if (cfg.coreDen == 0 || cfg.coreNum < 50000ULL * cfg.coreDen || cfg.coreNum > 200000ULL * cfg.coreDen || cfg.coreDen > 1000000ULL)
+            { std::fputs ("error: --core-rate must be a rate between 50000 and 200000 Hz as NUM/DEN\n", stderr); return 2; }
+        }
         else if (a == "--gain-db") cfg.gainDb = std::atof (next().c_str());
         else if (a == "--freqblock") cfg.freqblock = (uint32_t) std::strtoul (next().c_str(), nullptr, 0);
         else if (a == "--script") cfg.script = next();
@@ -226,6 +242,16 @@ int main (int argc, char** argv)
         std::fprintf (stderr, "error: sample rate %d Hz is not in the exact-ratio list (22050 32000 44100 48000 88200 96000 176400 192000). "
                               "Convert the file to one of these rates first.\n", in.rate);
         return 1;
+    }
+
+    if (cfg.coreNum)
+    {
+        if (in.rate != 96000)
+        {
+            std::fputs ("error: --core-rate needs a 96000 Hz input file (it is processed without resampling)\n", stderr);
+            return 1;
+        }
+        ad.engine().scheduler = smr::Scheduler ((uint64_t) cfg.coreNum, (uint64_t) cfg.coreDen);   // before ad.reset(), which resets the scheduler
     }
 
     std::vector<Event> events;
@@ -295,6 +321,7 @@ int main (int argc, char** argv)
     float peak = 0.0f;
     for (float x : out.data) peak = std::max (peak, std::fabs (x));
     std::printf ("smr_render: %zu frames in, %zu frames out at %d Hz\n", inFrames, out.frames(), in.rate);
+    if (cfg.coreNum) std::printf ("  core rate %llu/%llu Hz (%.6f), file processed 1:1\n", cfg.coreNum, cfg.coreDen, (double) cfg.coreNum / (double) cfg.coreDen);
     std::printf ("  host block %d, core blocks %llu, trimmed latency %zu frames, underruns %llu\n", cfg.block,
                  (unsigned long long) ad.blocksProcessed(), latency, (unsigned long long) ad.underruns());
     std::printf ("  output peak %.6f (%.2f dBFS), audio saturation events %llu, search-loop guard trips %llu\n", (double) peak,

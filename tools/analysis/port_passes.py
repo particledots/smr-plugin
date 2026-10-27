@@ -72,13 +72,15 @@ def write_wav_float_mono(path, x, sr=C.FS):
         f.write(hdr + data)
 
 
-def render_pass(render, inwav, outdir, pid, stem, qpot, rot, chans, odds_off, gain_db, tmp):
+def render_pass(render, inwav, outdir, pid, stem, qpot, rot, chans, odds_off, gain_db, tmp, core_rate=None):
     stereo = os.path.join(tmp, stem + "_stereo.wav")
     cmd = [render, inwav, stereo, "--pot", "0=%d" % qpot, "--gain-db", "%g" % gain_db, "--tail", "10"]
     for ch, (b, s, n) in sorted(chans.items()):
         cmd += ["--chan", "%d=%d,%d,%d" % (ch, b, s, n)]
     if odds_off is not None:
         cmd += ["--trackoffset", "0=%d" % odds_off]
+    if core_rate:   # "NUM/DEN": scheduler rate, file processed 1:1 (open question M2-b); see smr_render --help
+        cmd += ["--core-rate", core_rate]
     if rot:
         script = os.path.join(tmp, stem + "_script.txt")
         with open(script, "w") as f:
@@ -109,8 +111,18 @@ def main():
     ap.add_argument("--outdir", required=True)
     ap.add_argument("--variant", default="base", choices=sorted(VARIANTS))
     ap.add_argument("--gain-db", type=float, default=-30.0)
+    ap.add_argument("--core-rate", default=None, help="NUM/DEN, core rate for the scheduler (M2-b), e.g. 671875/7; frequencies in the output are then "
+                    "to be read at that rate: compare_port.py --port-rate")
+    ap.add_argument("--odds-trackoffset", type=int, default=None, help="override the trackoffset of channels 1/3/5 of the variant")
+    ap.add_argument("--only", default=None, help="comma list of passes to render, e.g. P3b,P3c (default all four)")
     a = ap.parse_args()
     chans, odds_off, text = VARIANTS[a.variant]
+    if a.odds_trackoffset is not None:
+        odds_off = a.odds_trackoffset
+        text += "; odds trackoffset %d" % odds_off
+    if a.core_rate:
+        text += "; core rate %s Hz" % a.core_rate
+    only = set(a.only.split(",")) if a.only else None
     os.makedirs(a.outdir, exist_ok=True)
     tmp = os.path.join(a.outdir, "_tmp")
     os.makedirs(tmp, exist_ok=True)
@@ -119,7 +131,9 @@ def main():
     lines = ["variant %s: %s; input gain %+g dB" % (a.variant, text, a.gain_db)]
     sat_total = 0
     for pid, stem, qpot, rot in PASSES:
-        out = render_pass(a.render, inwav, a.outdir, pid, stem, qpot, rot, chans, odds_off, a.gain_db, tmp)
+        if only and pid not in only:
+            continue
+        out = render_pass(a.render, inwav, a.outdir, pid, stem, qpot, rot, chans, odds_off, a.gain_db, tmp, a.core_rate)
         m = re.search(r"audio saturation events (\d+), search-loop guard trips (\d+)", out)
         sat, trips = (int(m.group(1)), int(m.group(2))) if m else (-1, -1)
         under = re.search(r"underruns (\d+)", out)

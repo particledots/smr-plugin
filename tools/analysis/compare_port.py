@@ -141,15 +141,35 @@ def fmt_peak(p):
     return "%.1f Hz: %+.2f c, width %+.1f %%, gain %+.2f dB" % (p["f_hw"], p["dcent"], p["dwidth_pct"], p["rgain"])
 
 
-def compare(hw_wavs, port_wavs, label="port"):
+def scale_rows(port_rows, scale):
+    """Read the port's frequencies at another core rate (open question M2-b): a render made with smr_render --core-rate is a
+    96000 Hz file whose time axis is really scale = rate / 96000 times as long per sample, so every frequency and every
+    width in Hz is multiplied by scale. Gains are unchanged."""
+    if scale == 1.0:
+        return port_rows
+    out = {}
+    for key, rows in port_rows.items():
+        new = []
+        for r in rows:
+            r = dict(r)
+            if r.get("resolved"):
+                r["f_hz"] *= scale
+                r["fwhm_hz"] *= scale
+            new.append(r)
+        out[key] = new
+    return out
+
+
+def compare(hw_wavs, port_wavs, label="port", port_scale=1.0):
     """The comparison itself. hw_wavs and port_wavs are {(pass, jack): Wav}. Returns (result dict, list of (level, topic, lines))."""
     ann = []
-    hw_rows, port_rows = peak_rows(hw_wavs), peak_rows(port_wavs)
+    hw_rows, port_rows = peak_rows(hw_wavs), scale_rows(peak_rows(port_wavs), port_scale)
     peaks, notes = compare_peaks(hw_rows, port_rows)
     offs = gain_residuals(peaks) if peaks else {j: None for j in JACKS}
     result = OrderedDict(label=label, peaks=peaks, gain_offset_db=offs, notes=notes)
 
-    lines = ["Port minus hardware, measured by the same code. Tolerances: %.0f cent, %.0f %% width, %.1f dB gain." % (TOL_CENT, TOL_WIDTH_PCT, TOL_GAIN_DB),
+    lines = (["Port read at core rate %.6f Hz (frequencies and widths scaled by %.8f)." % (port_scale * FS, port_scale)] if port_scale != 1.0 else []) + \
+            ["Port minus hardware, measured by the same code. Tolerances: %.0f cent, %.0f %% width, %.1f dB gain." % (TOL_CENT, TOL_WIDTH_PCT, TOL_GAIN_DB),
              "Gain is judged after removing one common offset per jack (the absolute level is not known, M1-n): odds %s dB, evens %s dB (median over %d peaks)."
              % tuple([("%+.2f" % offs["odds"]) if offs["odds"] is not None else "n/a", ("%+.2f" % offs["evens"]) if offs["evens"] is not None else "n/a", len(peaks) // 2 if peaks else 0])]
     for n in notes:
@@ -213,10 +233,11 @@ def main():
     ap.add_argument("portdir")
     ap.add_argument("--label", default="port")
     ap.add_argument("--json")
+    ap.add_argument("--port-rate", type=float, default=96000.0, help="core rate in Hz the port was rendered at (smr_render --core-rate); default 96000")
     a = ap.parse_args()
     _, hw_wavs = A.load_capture(a.hwdir, A.Report())
     _, port_wavs = A.load_capture(a.portdir, A.Report())
-    result, ann = compare(hw_wavs, port_wavs, a.label)
+    result, ann = compare(hw_wavs, port_wavs, a.label, a.port_rate / FS)
     for level, topic, lines in ann:
         C.emit(level, topic, lines)
     if a.json:
