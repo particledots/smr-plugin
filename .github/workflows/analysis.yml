@@ -1,6 +1,8 @@
 name: Capture analysis (Milestone 3)
 
-# Stage 1: self-test of the analysis tool on fake recordings with known answers.
+# Job 1: self-test of the analysis tool on fake recordings with known answers.
+# Job 2 (only after job 1 passes, and not on pull requests): analyse the real hardware recordings attached to the
+# GitHub release tagged capture-1 (asset SMRCapture.zip).
 # Results appear as annotations on the run (CI logs cannot be downloaded in Claude's session).
 
 on:
@@ -16,6 +18,10 @@ on:
       - 'tools/capture/gen_signals.py'
       - '.github/workflows/analysis.yml'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag holding the capture'
+        default: 'capture-1'
 
 jobs:
   analysis-selftest:
@@ -35,3 +41,45 @@ jobs:
       - name: Self-test on fake recordings
         run: |
           python tools/analysis/selftest.py "$RUNNER_TEMP/selftest"
+
+  analyse-capture:
+    needs: analysis-selftest
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      CAPTURE_TAG: ${{ github.event.inputs.tag || 'capture-1' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install numpy and scipy
+        run: python -m pip install -r tools/analysis/requirements.txt
+
+      - name: Download the capture from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/cap"
+          gh release download "$CAPTURE_TAG" --repo "${{ github.repository }}" --pattern 'SMRCapture.zip' --dir "$RUNNER_TEMP/cap"
+          sha=$(sha256sum "$RUNNER_TEMP/cap/SMRCapture.zip" | cut -d' ' -f1)
+          size=$(stat -c %s "$RUNNER_TEMP/cap/SMRCapture.zip")
+          unzip -q "$RUNNER_TEMP/cap/SMRCapture.zip" -x '__MACOSX/*' -d "$RUNNER_TEMP/cap/x"
+          echo "::notice title=Capture asset::tag $CAPTURE_TAG, SMRCapture.zip, $size bytes, sha256 $sha"
+          find "$RUNNER_TEMP/cap/x" -name '*.wav' | sort
+
+      - name: Analyse the recordings
+        run: |
+          d=$(find "$RUNNER_TEMP/cap/x" -type d -name SMRCapture | head -1)
+          [ -n "$d" ] || d="$RUNNER_TEMP/cap/x"
+          python tools/analysis/analyse_capture.py "$d" --json "$RUNNER_TEMP/analysis_result.json"
+
+      - name: Keep the numbers
+        uses: actions/upload-artifact@v4
+        with:
+          name: capture-analysis-result
+          path: ${{ runner.temp }}/analysis_result.json
