@@ -98,7 +98,7 @@ namespace
 
     void testTable()
     {
-        check (kNumParams == 47, "parameter count is 47", fmt ("%.0f", kNumParams));
+        check (kNumParams == 49, "parameter count is 49", fmt ("%.0f", kNumParams));
 
         bool unique = true, ranges = true, names = true, no4ms = true;
         for (int i = 0; i < kNumParams; ++i)
@@ -421,6 +421,53 @@ namespace
             r.p ("lockhold1") = 0.0f; r.run (60);
             check (r.e->lock[0] == 0 && ParamApplier::coreLockChanges (*r.e, r.v, &vals) == 1u && vals == 0u,
                    "a second tap unlocks in the core and is reported with value 0");
+        }
+
+        // Milestone 7, step 2: the two Lock jack triggers (params.c process_lock_jacks).
+        {
+            Rig r;
+            r.start(); r.run (50);
+            r.pulse ("lockjack135"); r.run (50);
+            check (r.e->lock[0] == 1 && r.e->lock[2] == 1 && r.e->lock[4] == 1 && r.e->lock[1] == 0 && r.e->lock[3] == 0 && r.e->lock[5] == 0,
+                   "Lock 1 3 5 trigger, switch 135: channels 1, 3, 5 lock");
+            uint32_t vals = 0;
+            const uint32_t mask = ParamApplier::coreLockChanges (*r.e, r.v, &vals);
+            check (mask == 0b010101u && vals == 0b010101u, "the jack's lock changes are reported for the Lock 1, 3, 5 parameters", fmt ("%.0f %.0f", (double) mask, (double) vals));
+            r.e->motion_spread_dir[0] = 1;   // the jack does not clear it; the sync below must not either
+            r.p ("lock1") = 1.0f; r.p ("lock3") = 1.0f; r.p ("lock5") = 1.0f; r.run (5);   // what the message-thread sync does
+            check (ParamApplier::coreLockChanges (*r.e, r.v, nullptr) == 0u && r.e->lock[0] == 1 && r.e->lock[2] == 1 && r.e->lock[4] == 1,
+                   "after the Lock parameters follow, no change is reported and the locks stay");
+            check (r.e->motion_spread_dir[0] == 1, "the sync does not clear motion_spread_dir (setLockLatched does nothing when the state already matches)");
+            r.pulse ("lockjack135"); r.run (50);
+            check (r.e->lock[0] == 0 && r.e->lock[2] == 0 && r.e->lock[4] == 0, "a second Lock 1 3 5 trigger unlocks them");
+            check (ParamApplier::coreLockChanges (*r.e, r.v, &vals) == 0b010101u && vals == 0u, "and is reported with value 0");
+        }
+        {
+            Rig r;
+            r.p ("oddsmode") = 1.0f; r.p ("evensmode") = 1.0f;
+            r.start(); r.run (50);
+            r.pulse ("lockjack135"); r.run (50);
+            check (r.e->lock[0] == 1 && r.e->lock[2] == 0 && r.e->lock[4] == 0, "Lock 1 3 5 trigger, switch 1: only channel 1 locks");
+            r.pulse ("lockjack246"); r.run (50);
+            check (r.e->lock[5] == 1 && r.e->lock[1] == 0 && r.e->lock[3] == 0, "Lock 2 4 6 trigger, switch 6: only channel 6 locks");
+        }
+        {
+            Rig r;
+            r.start(); r.run (50);
+            r.pulse ("lockjack246"); r.run (50);
+            check (r.e->lock[1] == 1 && r.e->lock[3] == 1 && r.e->lock[5] == 1 && r.e->lock[0] == 0 && r.e->lock[2] == 0 && r.e->lock[4] == 0,
+                   "Lock 2 4 6 trigger, switch 246: channels 2, 4, 6 lock");
+            r.p ("lockjack246") = 1.0f; r.run (2000);   // held on: one trigger, not a stream
+            r.p ("lockjack246") = 0.0f; r.run (10);
+            check (r.e->lock[1] == 0 && r.e->lock[3] == 0 && r.e->lock[5] == 0, "a Lock jack trigger held on fires once (rising edge)");
+            check (r.ap.triggerEdges (5) == 2 && r.ap.triggerReleases (5) == 2 && r.ap.triggerEdges (4) == 0 && r.ap.triggerEdges (6) == 0,
+                   "the counters count Lock 2 4 6 edges and releases (index 5), not Lock 1 3 5 (index 4)");
+        }
+        {   // a project that was saved with a Lock jack parameter on must not fire it at load
+            Rig r;
+            r.p ("lockjack135") = 1.0f;
+            r.start(); r.run (50);
+            check (r.e->lock[0] == 0 && r.e->lock[2] == 0 && r.e->lock[4] == 0, "a Lock jack parameter that is on at start does not fire (initial apply only remembers it)");
         }
 
         // Bank applies to unlocked channels only (process_rotary_button release branch).

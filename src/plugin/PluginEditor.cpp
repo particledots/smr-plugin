@@ -43,6 +43,15 @@ public:
         knob (freq[0], "freqodds", 91, 255, 44);
         knob (freq[1], "freqevens", 909, 255, 44);
 
+        // The two Lock jacks, as trigger buttons under the Freq knobs (sketch v3 "Lock odds" and "Lock evens"; the firmware's
+        // params.c process_lock_jacks flips the lock of channels 1 3 5 or 2 4 6 according to the 135 | 1 and 246 | 6 switches).
+        lockOdds  = std::make_unique<smrui::PulseButton> ("Lock odds", *apvts.getParameter ("lockjack135"), 0, false, linkFor (p, 4));
+        lockEvens = std::make_unique<smrui::PulseButton> ("Lock evens", *apvts.getParameter ("lockjack246"), 0, false, linkFor (p, 5));
+        place (*lockOdds, 91, 317, 84, 30);
+        place (*lockEvens, 909, 317, 84, 30);
+        addAndMakeVisible (*lockOdds);
+        addAndMakeVisible (*lockEvens);
+
         // Res (Q), Morph, Spread.
         knob (qKnob, "q", 106, 723, 72);
         knob (morph, "morph", 860, 723, 56);
@@ -94,13 +103,13 @@ public:
     void setTriggerSeen (const uint32_t* seen)
     {
         juce::String t ("triggers sent/seen:   ");
-        static const char* const names[4] = { "Rot CW", "Rot CCW", "Scale up", "Scale down" };
-        for (int k = 0; k < 4; ++k)
+        static const char* const names[6] = { "Rot CW", "Rot CCW", "Scale up", "Scale down", "Lock 135", "Lock 246" };
+        for (int k = 0; k < 6; ++k)
             t << (k ? "   " : "") << names[k] << " " << (juce::int64) sent[k] << "/" << (juce::int64) seen[k];
         if (t != diagText)
         {
             diagText = t;
-            repaint (330, 46, 640, 24);
+            repaint (200, 46, 770, 24);
         }
     }
 
@@ -215,7 +224,7 @@ public:
         g.setFont (13.0f);
         g.drawText (statusText, juce::Rectangle<float> (430.0f, 24.0f, 535.0f, 22.0f), juce::Justification::centredRight, false);
         g.setFont (12.0f);
-        g.drawText (diagText, juce::Rectangle<float> (330.0f, 48.0f, 635.0f, 18.0f), juce::Justification::centredRight, false);
+        g.drawText (diagText, juce::Rectangle<float> (200.0f, 48.0f, 765.0f, 18.0f), juce::Justification::centredRight, false);
         g.setFont (13.0f);
 
         // Channel strips.
@@ -365,7 +374,7 @@ private:
     int lockFlash1 = 0;
     Meter meters[4];
 
-    // Trigger k: 0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down. The processor outlives the editor.
+    // Trigger k: 0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down, 4 Lock jack 1 3 5, 5 Lock jack 2 4 6. The processor outlives the editor.
     smrui::TriggerLink linkFor (SmrAudioProcessor& p, int k)
     {
         smrui::TriggerLink l;
@@ -425,13 +434,13 @@ private:
 
     juce::AudioProcessorValueTreeState& apvts;
     juce::String statusText, readout, diagText;
-    uint32_t sent[4] = {};
+    uint32_t sent[6] = {};
 
     juce::Slider levels[6], nudge[2], freq[2], qKnob, morph, spread;
     std::unique_ptr<smrui::LockButton> locks[6];
     juce::ComboBox filterMode, filterType, bank;
     std::unique_ptr<smrui::SlideSwitch> oddsSwitch, evensSwitch, slewSwitch, scaleRotSwitch, prePostSwitch, envSwitch;
-    std::unique_ptr<smrui::PulseButton> rotCcw, rotCw, scaleDown, scaleUp;
+    std::unique_ptr<smrui::PulseButton> rotCcw, rotCw, scaleDown, scaleUp, lockOdds, lockEvens;
     std::unique_ptr<smrui::RotateDial> dial;
 
     // Declared last so they are destroyed first, while the controls they point to still exist.

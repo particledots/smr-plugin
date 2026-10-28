@@ -766,6 +766,47 @@ namespace
         proc->releaseResources();
     }
 
+    // Milestone 7, step 2: the Lock jack trigger parameters through the real processor, and the sync into the Lock parameters.
+    void testLockJackSync()
+    {
+        auto proc = std::make_unique<SmrAudioProcessor>();
+        proc->setRateAndBufferSizeDetails (48000.0, 512);
+        proc->prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buf (2, 512);
+        juce::MidiBuffer midi;
+        auto blocks = [&] (int n) { for (int b = 0; b < n; ++b) { buf.clear(); proc->processBlock (buf, midi); } };
+        auto& apvts = proc->parameters();
+        auto raw = [&] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
+        auto setp = [&] (const char* id, float v) { auto* pp = apvts.getParameter (id); pp->setValueNotifyingHost (pp->convertTo0to1 (v)); };
+
+        blocks (300);
+        setp ("lockjack135", 1.0f); blocks (6);
+        setp ("lockjack135", 0.0f); blocks (6);
+        proc->syncLockParameters();
+        check (raw ("lock1") >= 0.5f && raw ("lock3") >= 0.5f && raw ("lock5") >= 0.5f && raw ("lock2") < 0.5f && raw ("lock4") < 0.5f && raw ("lock6") < 0.5f,
+               "lock jack: one Lock 1 3 5 pulse sets the Lock 1, 3 and 5 parameters and leaves 2, 4 and 6 alone",
+               fmt ("%.0f%.0f%.0f%.0f%.0f%.0f", (double) raw ("lock1"), (double) raw ("lock2"), (double) raw ("lock3"), (double) raw ("lock4"), (double) raw ("lock5"), (double) raw ("lock6")));
+        blocks (10);
+        proc->syncLockParameters();
+        check (raw ("lock1") >= 0.5f && raw ("lock3") >= 0.5f && raw ("lock5") >= 0.5f, "lock jack: the Lock parameters stay on after the sync (the core does not undo them)");
+        setp ("lockjack135", 1.0f); blocks (6);
+        setp ("lockjack135", 0.0f); blocks (6);
+        proc->syncLockParameters();
+        check (raw ("lock1") < 0.5f && raw ("lock3") < 0.5f && raw ("lock5") < 0.5f, "lock jack: a second pulse clears them");
+
+        setp ("evensmode", 1.0f);
+        setp ("lockjack246", 1.0f); blocks (6);
+        setp ("lockjack246", 0.0f); blocks (6);
+        proc->syncLockParameters();
+        check (raw ("lock6") >= 0.5f && raw ("lock2") < 0.5f && raw ("lock4") < 0.5f, "lock jack: with the 246 | 6 switch on 6, the Lock 2 4 6 pulse sets only the Lock 6 parameter");
+
+        const auto s = proc->status();
+        check (s.trigSeen[4] == 2 && s.trigSeen[5] == 1 && proc->triggerRisingCount (4) == 2 && proc->triggerFallingCount (4) == 2
+               && proc->triggerRisingCount (5) == 1 && proc->triggerFallingCount (5) == 1,
+               "lock jack: the counters see 2 pulses on Lock 1 3 5 and 1 on Lock 2 4 6", fmt ("%.0f %.0f", (double) s.trigSeen[4], (double) s.trigSeen[5]));
+        proc->releaseResources();
+    }
+
     int selftest()
     {
         testLayouts();
@@ -781,6 +822,7 @@ namespace
         testTriggerCounters();
         testDisplay();
         testLockHoldSync();
+        testLockJackSync();
         std::printf ("%s: %d checks, %d failed\n", failures ? "FAIL" : "PASS", checks, failures);
         return failures ? 1 : 0;
     }

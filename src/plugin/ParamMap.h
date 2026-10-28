@@ -23,7 +23,8 @@ namespace smr_plugin
         OddsMode, EvensMode, PrePost, EnvSpeed, Slew, ScaleRotation,
         RotateCw, RotateCcw, ScaleUp, ScaleDown,
         Bank, Lock, FilterMode, FilterType,
-        LockHold   // Milestone 7: the Lock button pin of one channel (params.c process_lock_buttons)
+        LockHold,  // Milestone 7: the Lock button pin of one channel (params.c process_lock_buttons)
+        LockJackOdds, LockJackEvens   // Milestone 7: the two Lock jacks (params.c process_lock_jacks, do_LOCK135, do_LOCK246)
     };
 
     struct ParamSpec
@@ -39,7 +40,8 @@ namespace smr_plugin
         const char* const* choices;
     };
 
-    constexpr int kNumParams = 47;
+    constexpr int kNumParams = 49;
+    constexpr int kNumTriggers = 6;   // trigger 0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down, 4 Lock jack 1 3 5, 5 Lock jack 2 4 6
 
     const ParamSpec& spec (int index);
     int indexOfId (const char* id);                 // -1 if unknown
@@ -66,7 +68,7 @@ namespace smr_plugin
         static smr::Controls buildControls (const float* values);
 
         // Call once per host block, before audio. Sets the controls on the engine; locks, bank, filter mode and
-        // type are applied when their value changes; the four triggers fire on a rising edge (value reaches 0.5).
+        // type are applied when their value changes; the six triggers fire on a rising edge (value reaches 0.5).
         //
         // initial = true (after Engine::reset() or a snapshot load): locks and filter mode/type are set from the
         // values, bank and triggers are only remembered (the snapshot, not the Bank parameter, holds each
@@ -78,15 +80,16 @@ namespace smr_plugin
         // Call after the core blocks of a host block. Bit i of *coreValues is the core's lock[i] (set for the mismatching channels).
         static uint32_t coreLockChanges (const smr::Engine& engine, const float* values, uint32_t* coreValues);
 
-        // How many rising edges each trigger has had since this object was made (0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down).
+        // How many rising edges each trigger has had since this object was made (0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down,
+        // 4 Lock jack 1 3 5, 5 Lock jack 2 4 6). Out-of-range numbers give 0.
         // A diagnostic for the window (docs/open-questions.md M6-c); it does not affect the audio.
-        uint32_t triggerEdges (int which) const { return edges_[which & 3]; }
+        uint32_t triggerEdges (int which) const { return (unsigned) which < (unsigned) kNumTriggers ? edges_[which] : 0u; }
         // The same for falling edges (value goes from on to off). The window waits for this before it sends the next pulse.
-        uint32_t triggerReleases (int which) const { return releases_[which & 3]; }
+        uint32_t triggerReleases (int which) const { return (unsigned) which < (unsigned) kNumTriggers ? releases_[which] : 0u; }
 
     private:
         float prev_[kNumParams] = {};
-        uint32_t edges_[4] = {};
-        uint32_t releases_[4] = {};
+        uint32_t edges_[kNumTriggers] = {};
+        uint32_t releases_[kNumTriggers] = {};
     };
 }

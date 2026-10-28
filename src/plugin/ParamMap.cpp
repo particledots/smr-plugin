@@ -70,6 +70,8 @@ namespace smr_plugin
             B ("lockhold1", "Lock 1 Hold", LockHold, 0, 0.0f), B ("lockhold2", "Lock 2 Hold", LockHold, 1, 0.0f),
             B ("lockhold3", "Lock 3 Hold", LockHold, 2, 0.0f), B ("lockhold4", "Lock 4 Hold", LockHold, 3, 0.0f),
             B ("lockhold5", "Lock 5 Hold", LockHold, 4, 0.0f), B ("lockhold6", "Lock 6 Hold", LockHold, 5, 0.0f),
+            // Milestone 7, step 2: the two Lock jacks, as triggers (rising edge), appended after the Lock Hold parameters
+            B ("lockjack135", "Lock 1 3 5 (trigger)", LockJackOdds, 0, 0.0f), B ("lockjack246", "Lock 2 4 6 (trigger)", LockJackEvens, 0, 0.0f),
         };
 #undef F
 #undef B
@@ -266,15 +268,20 @@ namespace smr_plugin
                 case Role::RotateCcw:
                 case Role::ScaleUp:
                 case Role::ScaleDown:
+                case Role::LockJackOdds:
+                case Role::LockJackEvens:
                 {
-                    const int k = s.role == Role::RotateCw ? 0 : s.role == Role::RotateCcw ? 1 : s.role == Role::ScaleUp ? 2 : 3;
+                    const int k = s.role == Role::RotateCw ? 0 : s.role == Role::RotateCcw ? 1 : s.role == Role::ScaleUp ? 2
+                                : s.role == Role::ScaleDown ? 3 : s.role == Role::LockJackOdds ? 4 : 5;
                     const bool wasOn = prev_[i] >= 0.5f, nowOn = isOn (v, i);
                     if (! initial && ! wasOn && nowOn)
                     {
                         if (k == 0) e.triggerRotateUp();
                         else if (k == 1) e.triggerRotateDown();
                         else if (k == 2) e.change_scale_up();
-                        else e.change_scale_down();
+                        else if (k == 3) e.change_scale_down();
+                        else if (k == 4) e.triggerLock135();
+                        else e.triggerLock246();
                         ++edges_[k];
                     }
                     if (! initial && wasOn && ! nowOn) ++releases_[k];

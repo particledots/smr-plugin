@@ -252,6 +252,69 @@ namespace
     }
 
     // ---------------------------------------------------------------------------------------------------------
+    // Milestone 7, step 2: params.c process_lock_jacks. The oracle (V1) compares the same function with the firmware; these check the
+    // behaviour in plain terms.
+    void testLockJacks()
+    {
+        auto fresh = [] (bool oneMode, bool sixMode) {
+            std::unique_ptr<smr::Engine> e (new smr::Engine());
+            smr::Controls c = defaultControls();
+            c.mod135_one = oneMode;
+            c.mod246_six = sixMode;
+            e->setControls (c);
+            e->reset();
+            return e;
+        };
+        auto passes = [] (smr::Engine& e, int n) { for (int k = 0; k < n; ++k) e.runLoopPass(); };
+        auto mask = [] (const smr::Engine& e) { unsigned m = 0; for (int k = 0; k < 6; ++k) if (e.lock[k]) m |= 1u << k; return m; };
+
+        {
+            auto e = fresh (false, false);
+            passes (*e, 3);
+            check (mask (*e) == 0u, "M7 lock jacks: nothing locked at the start");
+            e->triggerLock135(); passes (*e, 1);
+            check (mask (*e) == 0b010101u && e->do_LOCK135 == 0, "M7 lock jack 1 3 5, switch 135: channels 1, 3, 5 lock; the flag is consumed");
+            passes (*e, 20);
+            check (mask (*e) == 0b010101u, "M7 lock jack 1 3 5: no further change without a new trigger");
+            e->triggerLock135(); passes (*e, 1);
+            check (mask (*e) == 0u, "M7 lock jack 1 3 5: a second trigger unlocks them");
+            e->triggerLock246(); passes (*e, 1);
+            check (mask (*e) == 0b101010u && e->do_LOCK246 == 0, "M7 lock jack 2 4 6, switch 246: channels 2, 4, 6 lock");
+            e->triggerLock246(); passes (*e, 1);
+            check (mask (*e) == 0u, "M7 lock jack 2 4 6: a second trigger unlocks them");
+        }
+        {
+            auto e = fresh (true, true);
+            passes (*e, 3);
+            e->triggerLock135(); passes (*e, 1);
+            check (mask (*e) == 0b000001u, "M7 lock jack 1 3 5, switch 1: only channel 1 locks");
+            e->triggerLock246(); passes (*e, 1);
+            check (mask (*e) == 0b100001u, "M7 lock jack 2 4 6, switch 6: only channel 6 locks");
+        }
+        {   // each channel inverts on its own: a locked channel unlocks, an unlocked one locks
+            auto e = fresh (false, false);
+            passes (*e, 3);
+            e->setLock (2, true);
+            e->triggerLock135(); passes (*e, 1);
+            check (mask (*e) == 0b010001u, "M7 lock jack inverts each channel: 3 was locked and unlocks, 1 and 5 lock");
+        }
+        {   // both flags in one pass
+            auto e = fresh (false, false);
+            passes (*e, 3);
+            e->triggerLock135(); e->triggerLock246(); passes (*e, 1);
+            check (mask (*e) == 0b111111u, "M7 lock jacks: both triggers in one pass lock all six channels");
+        }
+        {   // the jack touches lock[] only: no q_locked, lock_pressed or motion_spread_dir change (process_lock_jacks)
+            auto e = fresh (false, false);
+            passes (*e, 3);
+            e->setLock (0, true); e->setQLocked (0, true); e->motion_spread_dir[0] = 1; e->motion_spread_dir[2] = 1;
+            e->triggerLock135(); passes (*e, 1);
+            check (e->lock[0] == 0 && e->q_locked[0] == 1, "M7 lock jack unlock keeps the Q lock (the jack code does not touch q_locked)");
+            check (e->motion_spread_dir[2] == 1 && e->lock[2] == 1, "M7 lock jack lock does not clear motion_spread_dir (the button release does)");
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
     // V2: invariants
     void run (smr::Engine& e, Signal sig, uint64_t blocks, bool jitter, bool& finite, uint64_t& maxGuard)
     {
@@ -602,6 +665,7 @@ int main (int argc, char** argv)
     testResetAndControls();
     testLoopGuard();
     testLockButtons();
+    testLockJacks();
     testDefaultResonators();
     testAdapter();
     testResamplerRoundTrip();

@@ -184,7 +184,7 @@ void SmrAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
 
     smr::Engine& engine = adapter.engine();
     applier.apply (engine, values);
-    for (int k = 0; k < 4; ++k)
+    for (int k = 0; k < 6; ++k)
     {
         trigSeenStat[k].store (applier.triggerEdges (k));
         trigReleasedStat[k].store (applier.triggerReleases (k));
@@ -322,7 +322,7 @@ SmrAudioProcessor::Status SmrAudioProcessor::status() const
     s.rateSupported = rateSupportedStat.load();
     s.latencySamples = latencyStat.load();
     s.underruns = underrunStat.load();
-    for (int k = 0; k < 4; ++k) s.trigSeen[k] = trigSeenStat[k].load();
+    for (int k = 0; k < 6; ++k) s.trigSeen[k] = trigSeenStat[k].load();
     return s;
 }
 
