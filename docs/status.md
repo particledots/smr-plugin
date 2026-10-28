@@ -213,3 +213,8 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - 4 Env Out lights: Fast/Slow follow bands in channel colours; Trigger jumps on about 0.1 s; Post with a slider at the bottom keeps its light dark. All as expected.
 - 5 Meters: In and Out bars move, hold line about 1 s, fall to empty when stopped. As expected. Clip LED level (about -3 dBFS) and negative-only input: not tested by Bryn (CI selftest covers negative input: testDisplay, -0.9 does not light the LED).
 - Complaint: ring colours low contrast on the white panel. Addressed in the next build (see open-questions M6-h addendum 2).
+
+### 6b ring contrast and idle ping (Bryn, Intel Mac, 2026-10-27)
+- Build 40625336120 (attempt 2; the first download was blocked by a virus warning and a re-run fixed it): ring "looks better", all good (Bryn's words).
+- Idle ping on the filters (about one every 30 to 45 s with no audio) seen once in an older project, not seen in a new project. Not reproduced, cause unknown. Offline check: 5 minutes of silence through the core (default settings and sliders up with high Q) gave output exactly 0 (local g++ build of tools/smr_render, not a CI result). If it comes back, test the input path first.
+- 6b accepted on the Intel Mac. Not tested on the M4 mac mini. The "triggers sent/seen" line stays.
