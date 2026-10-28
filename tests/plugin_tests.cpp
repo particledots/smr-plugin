@@ -719,8 +719,17 @@ namespace
         check (outPeak > 0.0f, "display: the output meters see the plugin output after noise at the input", fmt ("peak %.5f", (double) outPeak));
         const bool got2 = hub.read (dd);
         bool sane = got2 && dd.valid == 1;
-        for (int c = 0; c < 6; ++c) sane = sane && dd.note[c] >= 0 && dd.note[c] < 20 && dd.fadeto[c] >= 0 && dd.fadeto[c] < 20 && dd.level[c] >= 0.0f && dd.envPwm[c] <= 4095;
-        check (sane, "display: the copy has notes 0 to 19, level >= 0 and ENVOUT_PWM <= 4095");
+        uint32_t maxPwm = 0;
+        for (int c = 0; c < 6; ++c)
+        {
+            sane = sane && dd.note[c] >= 0 && dd.note[c] < 20 && dd.fadeto[c] >= 0 && dd.fadeto[c] < 20 && dd.level[c] >= 0.0f;
+            maxPwm = std::max (maxPwm, dd.envPwm[c]);
+        }
+        check (sane, "display: the copy has notes 0 to 19 and level >= 0",
+               fmt ("notes %.0f %.0f %.0f %.0f", (double) dd.note[0], (double) dd.note[1], (double) dd.note[2], (double) dd.note[3]));
+        // envout_pwm.c: Post is (envelope x channel_level) >> 16, which reaches 32768 for a full-scale envelope, above the PWM period 4096;
+        // calculate_envout_leds divides by 4096 and clamps each colour at 1023. Reported, not asserted.
+        info ("display: largest ENVOUT_PWM value after the noise (the firmware's PWM period is 4096)", fmt ("%.0f", (double) maxPwm));
 
         // A host rate the plugin does not support runs nothing: the copy is marked not valid.
         proc->prepareToPlay (44101.0, 512);
