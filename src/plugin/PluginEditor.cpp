@@ -252,10 +252,13 @@ public:
         {
             const float a = (float) i * juce::MathConstants<float>::twoPi / (float) smr_plugin::kRingLeds;
             const float x = kRingCx + kRingRx * std::sin (a), y = kRingCy - kRingRy * std::cos (a);
-            g.setColour (ledColour (ringLed[i], 0.5f));
-            g.fillEllipse (x - 9.0f, y - 9.0f, 18.0f, 18.0f);
+            // A lit LED is drawn larger than an unlit one, so it reads on the white panel (display choice, not firmware).
+            const bool lit = ringLed[i][0] > 0 || ringLed[i][1] > 0 || ringLed[i][2] > 0;
+            const float r = lit ? 11.0f : 7.0f;
+            g.setColour (ledColour (ringLed[i], 0.35f));
+            g.fillEllipse (x - r, y - r, 2.0f * r, 2.0f * r);
             g.setColour (juce::Colour (0xff1c1c1c));
-            g.drawEllipse (x - 9.0f, y - 9.0f, 18.0f, 18.0f, 2.5f);
+            g.drawEllipse (x - r, y - r, 2.0f * r, 2.0f * r, 2.5f);
         }
 
         g.setColour (smrui::softInk());
