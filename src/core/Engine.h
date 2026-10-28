@@ -80,6 +80,16 @@ namespace smr
         uint8_t  lock_button[kNumChannels] = {};    // LOCKBUTTON(i) (dig_inouts.c): the Lock button pin, 1 while pressed. Set by the host with setLockButton().
         uint32_t lock_down[kNumChannels] = {};
         uint8_t  num_clear_coarse_staged = 0;
+        // Display-only state of params.c param_read_freq (Milestone 7 step 3b, docs/port-notes.md P-8). Names are the C names.
+        // Not read by the audio, the envelopes or any other core code.
+        uint8_t  ongoing_coarse_tuning[2] = {};     // BINARY CONVENTION of the *_envled_state values: params.c comment above saved_envled_state
+        uint8_t  ongoing_fine_tuning[2] = {};
+        uint32_t fine_tuning_timeout[2] = {};
+        uint8_t  fine_timer[2] = { 1, 1 };
+        int      saved_envled_state[kNumChannels] = { 0b0001100, 0b0001100, 0b0001100, 0b0001100, 0b0001100, 0b0001100 };
+        int      cur_envled_state = 0b0000000;
+        int      fine_envled = 0b000000;
+        float    coarse_adj_led[kNumChannels] = {};
         uint8_t  already_handled_lock_release[kNumChannels] = {};
         uint8_t  do_LOCK135 = 0, do_LOCK246 = 0, do_ROTUP = 0, do_ROTDOWN = 0;   // dig_inouts.c flags
 
@@ -165,6 +175,7 @@ namespace smr
             float   f_shift_odds = 1.0f, f_shift_evens = 1.0f;
             float   saved_coarse_adj[kNumChannels] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
             uint8_t clear_coarse_staged[kNumChannels] = {};
+            uint8_t old_switch_state[2] = {};
         } prf;
 
         struct ParamReadQStatics               // params.c param_read_q

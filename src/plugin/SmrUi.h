@@ -85,8 +85,8 @@ namespace smrui
         bool isSticky() const noexcept { return sticky; }
         bool isHeld() const noexcept { return held; }
 
-        // Set by the editor every frame: the Q-lock flicker (leds.c update_lock_leds) and the flash phase for a sticky hold.
-        bool qFlicker = false;
+        // Set by the editor every frame: the LED shows the opposite of the lock (Q-lock flicker, staged-clear flash: leds.c update_lock_leds) and the flash phase for a sticky hold.
+        bool inverted = false;
         bool flashPhase = false;
 
     private:
@@ -163,7 +163,7 @@ namespace smrui
             bool stickyFlash = false;
             if (auto* lb = dynamic_cast<LockButton*> (&b))
             {
-                if (lb->qFlicker) on = ! on;                       // leds.c update_lock_leds: a Q-locked channel inverts once in 16 updates
+                if (lb->inverted) on = ! on;                       // leds.c update_lock_leds: a Q-locked channel inverts once in 16 updates; a staged clear flashes
                 stickyFlash = lb->isSticky() && lb->flashPhase;    // plugin-only: shows that the button is being held by shift-click
             }
             g.setColour (on ? juce::Colour (0xffffeeb0) : paper());

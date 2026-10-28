@@ -1,9 +1,9 @@
 // Port of the DSP-relevant parts of third_party/SMR/params.c: param_read_freq, param_read_q,
 // param_read_switches, read_spread, process_rotateCV, process_scaleCV.
-// Omitted because they only drive LEDs (docs/port-notes.md item P-8): ongoing_fine_tuning, ongoing_coarse_tuning,
-// fine_tuning_timeout, fine_timer, fine_envled, cur_envled_state, saved_envled_state, coarse_adj_led,
-// old_switch_state and the "MORE FINE/COARSE TUNE DISPLAY CASES" else-if chain. None of them is read by
-// anything that reaches the audio or the envelope outputs.
+// Milestone 7 step 3b: the display-only state of param_read_freq (ongoing_fine_tuning, ongoing_coarse_tuning,
+// fine_tuning_timeout, fine_timer, fine_envled, cur_envled_state, saved_envled_state, coarse_adj_led, old_switch_state and the
+// "MORE FINE/COARSE TUNE DISPLAY CASES" else-if chain) is now ported too (docs/port-notes.md P-8). None of it is read by
+// anything that reaches the audio or the envelope outputs; V1 compares it with the firmware's own globals.
 // Every floating-point literal has an f suffix: the firmware is built with -fsingle-precision-constant.
 #include <cmath>
 
@@ -20,26 +20,26 @@ namespace smr
         // The coarse-tuning ladder that params.c writes out twice (once for t_fo and once for t_fe).
         // Same comparisons in the same order. Like the C, if t is >= 13*4095/13 (that is, exactly 4095)
         // no branch matches and coarse_adj keeps its old value; the function then returns false.
-        inline bool coarseLadder (float t, float& coarse_adj)
+        inline bool coarseLadder (float t, float& coarse_adj, int& envled)
         {
             // - 6 semitones
-            if (t < 1.0f * 4095.0f / 13.0f) { coarse_adj = 1.0f / 1.41421356237f; }
-            else if ((t >= 1.0f * 4095.0f / 13.0f) && (t < 2.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f / 1.33483985417f; }
-            else if ((t >= 2.0f * 4095.0f / 13.0f) && (t < 3.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f / 1.25992104989f; }
-            else if ((t >= 3.0f * 4095.0f / 13.0f) && (t < 4.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f / 1.189207115f; }
-            else if ((t >= 4.0f * 4095.0f / 13.0f) && (t < 5.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f / 1.12246204831f; }
-            else if ((t >= 5.0f * 4095.0f / 13.0f) && (t < 6.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f / 1.05946309436f; }
+            if (t < 1.0f * 4095.0f / 13.0f) { coarse_adj = 1.0f / 1.41421356237f; envled = 0b1111111; }
+            else if ((t >= 1.0f * 4095.0f / 13.0f) && (t < 2.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f / 1.33483985417f; envled = 0b1011111; }
+            else if ((t >= 2.0f * 4095.0f / 13.0f) && (t < 3.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f / 1.25992104989f; envled = 0b1001111; }
+            else if ((t >= 3.0f * 4095.0f / 13.0f) && (t < 4.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f / 1.189207115f; envled = 0b1000111; }
+            else if ((t >= 4.0f * 4095.0f / 13.0f) && (t < 5.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f / 1.12246204831f; envled = 0b1000011; }
+            else if ((t >= 5.0f * 4095.0f / 13.0f) && (t < 6.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f / 1.05946309436f; envled = 0b1000001; }
 
             //Tuned
-            else if ((t >= 6.0f * 4095.0f / 13.0f) && (t < 7.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f; }
+            else if ((t >= 6.0f * 4095.0f / 13.0f) && (t < 7.0f * 4095.0f / 13.0f)) { coarse_adj = 1.0f; envled = 0b0001100; }
 
             // + 6 semitones
-            else if ((t >= 7.0f * 4095.0f / 13.0f) && (t < 8.0f * 4095.0f / 13.0f)) { coarse_adj = 1.05946309436f; }
-            else if ((t >= 8.0f * 4095.0f / 13.0f) && (t < 9.0f * 4095.0f / 13.0f)) { coarse_adj = 1.12246204831f; }
-            else if ((t >= 9.0f * 4095.0f / 13.0f) && (t < 10.0f * 4095.0f / 13.0f)) { coarse_adj = 1.189207115f; }
-            else if ((t >= 10.0f * 4095.0f / 13.0f) && (t < 11.0f * 4095.0f / 13.0f)) { coarse_adj = 1.25992104989f; }
-            else if ((t >= 11.0f * 4095.0f / 13.0f) && (t < 12.0f * 4095.0f / 13.0f)) { coarse_adj = 1.33483985417f; }
-            else if ((t >= 12.0f * 4095.0f / 13.0f) && (t < 13.0f * 4095.0f / 13.0f)) { coarse_adj = 1.41421356237f; }
+            else if ((t >= 7.0f * 4095.0f / 13.0f) && (t < 8.0f * 4095.0f / 13.0f)) { coarse_adj = 1.05946309436f; envled = 0b0100000; }
+            else if ((t >= 8.0f * 4095.0f / 13.0f) && (t < 9.0f * 4095.0f / 13.0f)) { coarse_adj = 1.12246204831f; envled = 0b0110000; }
+            else if ((t >= 9.0f * 4095.0f / 13.0f) && (t < 10.0f * 4095.0f / 13.0f)) { coarse_adj = 1.189207115f; envled = 0b0111000; }
+            else if ((t >= 10.0f * 4095.0f / 13.0f) && (t < 11.0f * 4095.0f / 13.0f)) { coarse_adj = 1.25992104989f; envled = 0b0111100; }
+            else if ((t >= 11.0f * 4095.0f / 13.0f) && (t < 12.0f * 4095.0f / 13.0f)) { coarse_adj = 1.33483985417f; envled = 0b0111110; }
+            else if ((t >= 12.0f * 4095.0f / 13.0f) && (t < 13.0f * 4095.0f / 13.0f)) { coarse_adj = 1.41421356237f; envled = 0b0111111; }
             else return false;
             return true;
         }
@@ -129,18 +129,40 @@ namespace smr
             // ODDS
             if (std::fabs (f_nudge_odds - s.old_f_nudge_odds) > 0.0029304029304f)   // NUDGEPOT_MIN_CHANGE
             {
+                // inform led_ring_c that fine tuning is ongoing
+                ongoing_fine_tuning[0] = 1;
+
                 // update buffers
                 s.f_nudge_odds_buf = s.old_f_nudge_odds;
                 s.old_f_nudge_odds = f_nudge_odds;
+
+                // enable fine tuning timer for slow display release
+                fine_timer[0] = 1;
 
                 // for each odd channel
                 for (i = 0; i < 3; i++)
                 {
                     j = (uint8_t) odds[i];
 
+                    //update fine tuning env led
+                    fine_envled = fine_envled | (1 << (5 - j));
+
+                    // inform led_ring_c that fine tuning is ongoing on odds chan(s)
+                    ongoing_fine_tuning[0] = 1;
+                    fine_tuning_timeout[0] = 1;   // stage timeout counter
+
                     // If lock button pressed, disable fine tuning and process coarse tuning
                     if (lock_pressed[j])
                     {
+                        // inform led_ring_c that coarse tuning is ongoing
+                        ongoing_coarse_tuning[0] = 1;
+
+                        // disable fine tuning timer for instantaneous display release
+                        fine_timer[0] = 0;
+
+                        // coarse tuning superseds fine tuning
+                        ongoing_fine_tuning[0] = 0;
+
                         // disable fine adjustments when setting coarse tuning
                         if (s.fknob_lock[0] == 0)
                         {
@@ -148,12 +170,12 @@ namespace smr
                             s.fknob_lock[0] = 1;
                         }
                         // Compute and apply coarse tuning
-                        coarseLadder (t_fo, coarse_adj[j]);
+                        coarseLadder (t_fo, coarse_adj[j], cur_envled_state);
 
                         // apply/clear coarse lock as needed
                         if (std::fabs (coarse_adj[j] - s.saved_coarse_adj[j]) < 0.001f) { s.coarse_lock[j] = 0; }
-                        if (s.coarse_lock[j]) { coarse_adj[j] = s.saved_coarse_adj[j]; }
-                        else { s.saved_coarse_adj[j] = coarse_adj[j]; }
+                        if (s.coarse_lock[j]) { coarse_adj[j] = s.saved_coarse_adj[j]; cur_envled_state = saved_envled_state[j]; }
+                        else { s.saved_coarse_adj[j] = coarse_adj[j]; saved_envled_state[j] = cur_envled_state; }
 
                         // apply coarse adjustment (in case channel is locked)
                         freq_nudge[j] = s.f_nudge_buf[0] * coarse_adj[j];
@@ -167,18 +189,40 @@ namespace smr
             // EVENS
             if (std::fabs (f_nudge_evens - s.old_f_nudge_evens) > 0.0029304029304f)   // NUDGEPOT_MIN_CHANGE
             {
+                // inform led_ring_c that fine tuning is ongoing
+                ongoing_fine_tuning[1] = 1;
+
                 // update buffers
                 s.f_nudge_evens_buf = s.old_f_nudge_evens;
                 s.old_f_nudge_evens = f_nudge_evens;
+
+                // enable fine tuning timer for slow display release
+                fine_timer[1] = 1;
 
                 // for each even channel
                 for (i = 0; i < 3; i++)
                 {
                     j = (uint8_t) evens[i];
 
+                    //update fine tuning env led
+                    fine_envled = fine_envled | (1 << (5 - j));
+
+                    // inform led_ring_c that fine tuning is ongoing on evens chan(s)
+                    ongoing_fine_tuning[1] = 1;
+                    fine_tuning_timeout[1] = 1;   // stage timeout counter
+
                     // If lock button pressed, disable fine tuning and process coarse tuning
                     if (lock_pressed[j])
                     {
+                        // inform led_ring_c that coarse tuning is ongoing
+                        ongoing_coarse_tuning[1] = 1;
+
+                        // disable fine tuning timer for instantaneous display release
+                        fine_timer[1] = 0;
+
+                        // coarse tuning superseds fine tuning
+                        ongoing_fine_tuning[1] = 0;
+
                         // disable fine adjustments when setting coarse tuning
                         if (s.fknob_lock[1] == 0)
                         {
@@ -186,12 +230,12 @@ namespace smr
                             s.fknob_lock[1] = 1;
                         }
                         // Compute and apply coarse tuning
-                        coarseLadder (t_fe, coarse_adj[j]);
+                        coarseLadder (t_fe, coarse_adj[j], cur_envled_state);
 
                         // apply/clear coarse lock as needed
                         if (std::fabs (coarse_adj[j] - s.saved_coarse_adj[j]) < 0.001f) { s.coarse_lock[j] = 0; }
-                        if (s.coarse_lock[j]) { coarse_adj[j] = s.saved_coarse_adj[j]; }
-                        else { s.saved_coarse_adj[j] = coarse_adj[j]; }
+                        if (s.coarse_lock[j]) { coarse_adj[j] = s.saved_coarse_adj[j]; cur_envled_state = saved_envled_state[j]; }
+                        else { s.saved_coarse_adj[j] = coarse_adj[j]; saved_envled_state[j] = cur_envled_state; }
 
                         // apply coarse adjustment (in case channel is locked)
                         freq_nudge[j] = s.f_nudge_buf[1] * coarse_adj[j];
@@ -199,6 +243,99 @@ namespace smr
                         already_handled_lock_release[j] = 1;
                     }
                     else { s.coarse_lock[j] = 1; }
+                }
+            }
+
+            // MORE FINE/COARSE TUNE DISPLAY CASES
+            // stop displaying fine tune if fine tune knob is not being adjusted but leave display on for timed duration.
+            // NOTE: in params.c this `else if` chain belongs to the EVENS `if` above, so the timeouts only count on passes
+            // where the Evens knob did not move (docs/open-questions.md M7-g).
+            // special case: both fine tunes are ajusted at once. Leave more time to facilitate tuning odds/even together
+            else if ((ongoing_fine_tuning[0] == 1) && (ongoing_fine_tuning[1] == 1))
+            {
+                fine_tuning_timeout[0] += 1;
+                fine_tuning_timeout[1] += 1;
+                if ((fine_tuning_timeout[0] > (kDisplayTimeNudgeBothSides * fine_timer[0])) && (fine_tuning_timeout[1] > (kDisplayTimeNudgeBothSides * fine_timer[1])))
+                {
+                    ongoing_fine_tuning[0] = 0;
+                    ongoing_fine_tuning[1] = 0;
+                    fine_envled = fine_envled & 0b000000;   // turn off all env led
+                    fine_tuning_timeout[0] = 0;
+                    fine_tuning_timeout[1] = 0;
+                }
+            // turn off odds fine tune display after short time
+            }
+            else if ((ongoing_fine_tuning[0] == 1) && (ongoing_fine_tuning[1] == 0))
+            {
+                fine_tuning_timeout[0] += 1;
+                if (fine_tuning_timeout[0] > (kDisplayTimeNudgeOneSide * fine_timer[0]))
+                {
+                    ongoing_fine_tuning[0] = 0;
+                    fine_envled = fine_envled & 0b010101;   // turn off odds env led
+                    fine_tuning_timeout[0] = 0;
+                }
+            // turn off evens fine tune display after short time
+            }
+            else if ((ongoing_fine_tuning[1] == 1) && (ongoing_fine_tuning[0] == 0))
+            {
+                fine_tuning_timeout[1] += 1;
+                if (fine_tuning_timeout[1] > (kDisplayTimeNudgeOneSide * fine_timer[1]))
+                {
+                    ongoing_fine_tuning[1] = 0;
+                    fine_envled = fine_envled & 0b101010;   // turn off even env led
+                    fine_tuning_timeout[1] = 0;
+                }
+            }
+
+            // display fine tune when locked button is held down
+            if (lock_pressed[0] || lock_pressed[2] || lock_pressed[4])
+            {
+                fine_envled = fine_envled | 0b101010;
+                ongoing_fine_tuning[0] = 1;
+                fine_tuning_timeout[0] = 1;
+                if (! ongoing_coarse_tuning[0]) fine_timer[0] = 1;   //enable soft release
+            }
+            if (lock_pressed[1] || lock_pressed[3] || lock_pressed[5])
+            {
+                fine_envled = fine_envled | 0b010101;
+                ongoing_fine_tuning[1] = 1;
+                fine_tuning_timeout[1] = 1;
+                if (! ongoing_coarse_tuning[1]) fine_timer[1] = 1;   //enable soft release
+            }
+
+            // display fine tune when lock switch state is changed
+            // switch 135
+            if (mod_mode_135 != s.old_switch_state[0])
+            {
+                s.old_switch_state[0] = (uint8_t) mod_mode_135;
+                fine_envled = fine_envled | 0b101010;
+                ongoing_fine_tuning[0] = 1;
+                fine_tuning_timeout[0] = 1;   //reset the timer so that we get the full soft-release period
+                fine_timer[0] = 1;            //enable soft release
+            }
+            // switch 246
+            if (mod_mode_246 != s.old_switch_state[1])
+            {
+                s.old_switch_state[1] = (uint8_t) mod_mode_246;
+                fine_envled = fine_envled | 0b010101;
+                ongoing_fine_tuning[1] = 1;
+                fine_tuning_timeout[1] = 1;   //reset the timer so that we get the full soft-release period
+                fine_timer[1] = 1;            //enable soft release
+            }
+
+            // exit coarse tuning display as needed
+            if (ongoing_coarse_tuning[0])
+            {
+                if (! lock_pressed[0] && ! lock_pressed[2] && ! lock_pressed[4])
+                {
+                    ongoing_coarse_tuning[0] = 0;
+                }
+            }
+            if (ongoing_coarse_tuning[1])
+            {
+                if (! lock_pressed[1] && ! lock_pressed[3] && ! lock_pressed[5])
+                {
+                    ongoing_coarse_tuning[1] = 0;
                 }
             }
 
@@ -329,6 +466,15 @@ namespace smr
                 s.clear_coarse_staged[5] = 1;
                 num_clear_coarse_staged = 6;
             }
+            else
+            {
+                coarse_adj_led[0] = coarse_adj[0];
+                coarse_adj_led[1] = coarse_adj[1];
+                coarse_adj_led[2] = coarse_adj[2];
+                coarse_adj_led[3] = coarse_adj[3];
+                coarse_adj_led[4] = coarse_adj[4];
+                coarse_adj_led[5] = coarse_adj[5];
+            }
 
             if (num_clear_coarse_staged != 0)
             {
@@ -345,7 +491,11 @@ namespace smr
 
                             //update saved coarse adjustement & lock to it
                             s.saved_coarse_adj[k] = coarse_adj[k];
+                            saved_envled_state[k] = 0b0001100;
                             s.coarse_lock[k] = 1;
+
+                            // inform led.c that this coarse tuning was cleared
+                            coarse_adj_led[k] = coarse_adj[k];
 
                             // unstage coarse adjustment
                             s.clear_coarse_staged[k] = 0;

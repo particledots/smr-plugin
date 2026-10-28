@@ -136,6 +136,16 @@ namespace smrtest
         int motionRotate, motionNotejump, spread;
         uint32_t filterType, filterMode, envTrackMode;
         float levelLpf, fMorph;
+        // Milestone 7 step 3b: the display-only state of param_read_freq (docs/port-notes.md P-8) and coarse_adj.
+        const uint8_t* ongoingCoarse;   // ongoing_coarse_tuning[2]
+        const uint8_t* ongoingFine;     // ongoing_fine_tuning[2]
+        const uint32_t* fineTimeout;    // fine_tuning_timeout[2]
+        const uint8_t* fineTimer;       // fine_timer[2]
+        const int32_t* savedEnvled;     // saved_envled_state[6]
+        int32_t curEnvled, fineEnvled;  // cur_envled_state, fine_envled
+        const float* coarseAdj;         // coarse_adj[6]
+        const float* coarseAdjLed;      // coarse_adj_led[6]
+        uint32_t numClearStaged;        // num_clear_coarse_staged
     };
 
     inline void emit (Trace& t, const View& v)
@@ -177,6 +187,16 @@ namespace smrtest
         t.w ("env_track_mode", v.envTrackMode);
         t.f ("CHANNEL_LEVEL_LPF", v.levelLpf);
         t.f ("f_morph", v.fMorph);
+        arru8 ("ongoing_coarse_tuning", v.ongoingCoarse, 2);
+        arru8 ("ongoing_fine_tuning", v.ongoingFine, 2);
+        arru ("fine_tuning_timeout", v.fineTimeout, 2);
+        arru8 ("fine_timer", v.fineTimer, 2);
+        arr32 ("saved_envled_state", v.savedEnvled, 6);
+        t.i ("cur_envled_state", v.curEnvled);
+        t.i ("fine_envled", v.fineEnvled);
+        arrf ("coarse_adj", v.coarseAdj, 6);
+        arrf ("coarse_adj_led", v.coarseAdjLed, 6);
+        t.w ("num_clear_coarse_staged", v.numClearStaged);
     }
 
     // Table dump used by V1a: a flat list of 32-bit words, written as a Trace with one "step".

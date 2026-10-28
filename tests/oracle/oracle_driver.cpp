@@ -50,6 +50,10 @@ extern "C"
     extern int8_t motion_scale_dest[6], motion_scalecv_overage[6];
     extern int8_t motion_rotate, motion_notejump;
     extern int32_t filtered_buffer[16], filtered_bufferR[16];
+    extern uint8_t ongoing_coarse_tuning[2], ongoing_fine_tuning[2], fine_timer[2], num_clear_coarse_staged;
+    extern uint32_t fine_tuning_timeout[2];
+    extern int saved_envled_state[6], cur_envled_state, fine_envled;
+    extern float coarse_adj[6], coarse_adj_led[6];
     extern float* c_hiq[6];
     extern float* c_loq[6];
     extern float exp_4096[4096], exp_1voct[4096], log_4096[4096];
@@ -166,6 +170,17 @@ static void emitState (Trace& t)
     v.envTrackMode = env_track_mode;
     v.levelLpf = CHANNEL_LEVEL_LPF;
     v.fMorph = f_morph;
+    v.ongoingCoarse = ongoing_coarse_tuning;
+    v.ongoingFine = ongoing_fine_tuning;
+    v.fineTimeout = fine_tuning_timeout;
+    v.fineTimer = fine_timer;
+    static_assert (sizeof (int) == 4, "int is 32 bit");
+    v.savedEnvled = (const int32_t*) saved_envled_state;
+    v.curEnvled = cur_envled_state;
+    v.fineEnvled = fine_envled;
+    v.coarseAdj = coarse_adj;
+    v.coarseAdjLed = coarse_adj_led;
+    v.numClearStaged = num_clear_coarse_staged;
     emit (t, v);
 }
 

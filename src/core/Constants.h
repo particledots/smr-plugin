@@ -56,6 +56,11 @@ namespace smr
     constexpr uint64_t kTim10Counts = 8195 + 1;    // params.c init_freq_update_timer
     constexpr uint64_t kTim9Counts  = 30000 + 1;   // envout_pwm.c init_ENV_update_timer
     // Main loop: placeholder 12,000 iterations per second (decision M2-c, docs/open-questions.md).
+    // params.h DISPLAYTIME_*: counted in param_read_freq calls, which run on TIM10 (params.c TIM1_UP_TIM10_IRQHandler), so
+    // in units of kTim10Counts / 168 MHz (about 20.5 kHz): 12000 is about 0.585 s, 25000 about 1.22 s. Not main-loop passes.
+    constexpr uint32_t kDisplayTimeNudgeBothSides = 25000;
+    constexpr uint32_t kDisplayTimeNudgeOneSide   = 12000;
+
     constexpr uint64_t kLoopRateHz  = 12000;
     constexpr uint64_t kLoopCounts  = kTimerClockHz / kLoopRateHz;   // 14000 counts at 168 MHz
 

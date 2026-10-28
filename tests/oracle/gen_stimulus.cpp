@@ -1,5 +1,5 @@
 // Writes the stimulus files for the differential test. Deterministic (fixed seeds); no input files.
-//   gen_stimulus <scenario 0..7> <steps> <out>
+//   gen_stimulus <scenario 0..8> <steps> <out>
 // Scenarios (docs/architecture.md section 14, V1): every scenario uses a different mix of filter mode and
 // type, bank changes, Q, morph, rotation, spread, scale CV, levels, locks and tick schedules.
 #include <cmath>
@@ -38,7 +38,7 @@ namespace
 
 int main (int argc, char** argv)
 {
-    if (argc < 4) { std::printf ("usage: gen_stimulus <scenario 0..7> <steps> <out>\n"); return 2; }
+    if (argc < 4) { std::printf ("usage: gen_stimulus <scenario 0..8> <steps> <out>\n"); return 2; }
     const int scenario = std::atoi (argv[1]);
     const int n = std::atoi (argv[2]);
     Rng r (0x1234567u + (uint32_t) scenario * 7919u);
@@ -50,7 +50,7 @@ int main (int argc, char** argv)
 
     // scenario table: filter mode (2 TWOPASS, 3 ONEPASS), type (1 MAXQ, 0 BPRE), walker speed, bank interval, event rate (one in N steps)
     struct Sc { int mode, type, speed, bankEvery, eventOneIn, amp; bool randomTicks, extremes, switching; };
-    static const Sc table[8] = {
+    static const Sc table[9] = {
         /* 0 */ { 2, 1,  6, 400,  900, 1 << 18, false, false, false },   // two-pass MAXQ, slow controls
         /* 1 */ { 2, 1, 60, 300,  120, 1 << 18, false, false, false },   // two-pass MAXQ, fast controls, many events
         /* 2 */ { 3, 1, 12, 350,  300, 1 << 26, false, false, false },   // one-pass MAXQ
@@ -59,9 +59,17 @@ int main (int argc, char** argv)
         /* 5 */ { 2, 1, 30, 500,  250, 1 << 18, true,  false, false },  // random tick counts 0..6
         /* 6 */ { 3, 0, 300, 250, 100, 1 << 25, true,  true,  false },  // BpRe, extreme control jumps
         /* 7 */ { 2, 1, 300, 250, 100, 1 << 18, false, true,  true  },  // two-pass, extreme control jumps, switching
+        /* 8 */ { 2, 1,  6, 400,  900, 1 << 18, false, false, false },  // like 0, but the Freq Nudge controls move in short windows only (Milestone 7 step 3b)
     };
-    if (scenario < 0 || scenario > 7) { std::printf ("FAIL: scenario out of range\n"); return 2; }
+    if (scenario < 0 || scenario > 8) { std::printf ("FAIL: scenario out of range\n"); return 2; }
     const Sc sc = table[scenario];
+    // Scenario 8 (Milestone 7 step 3b): the display timers of params.c param_read_freq (DISPLAYTIME_NUDGEONESIDE 12000 and
+    // DISPLAYTIME_NUDGEBOTHSIDES 25000 TIM10 ticks, about 3.4 per step) only expire when nothing touches the Nudge knobs, the Lock
+    // buttons or the 135/246 switches for thousands of steps. So: Odds Nudge moves in steps 0..199, Evens Nudge in 4000..4199, both in
+    // 16000..16199, and in between those controls are frozen (Freq CV and Nudge are summed in t_fo/t_fe, so the Freq CVs freeze too).
+    const bool quiet = (scenario == 8);
+    auto windowOdds  = [] (int i) { return i < 200 || (i >= 16000 && i < 16200); };
+    auto windowEvens = [] (int i) { return (i >= 4000 && i < 4200) || (i >= 16000 && i < 16200); };
 
     Walker adc[15], pot[7];
     for (auto& w : adc) w = { r.range (0, 4095), 0, sc.speed, 150, 0, 4095 };
@@ -94,10 +102,20 @@ int main (int argc, char** argv)
         Step& s = steps[(size_t) i];
         std::memset (&s, 0, sizeof s);
 
-        for (int k = 0; k < 15; ++k) { adc[k].step (r); s.adc[k] = (uint16_t) adc[k].v; }
+        for (int k = 0; k < 15; ++k)
+        {
+            const bool frozen = quiet && (((k == 8 || k == 13) && ! windowOdds (i)) || ((k == 9 || k == 14) && ! windowEvens (i)));
+            if (quiet && ! frozen && (k == 8 || k == 9 || k == 13 || k == 14)) adc[k].speed = 60;
+            if (! frozen) adc[k].step (r);
+            s.adc[k] = (uint16_t) adc[k].v;
+        }
         for (int k = 0; k < 7; ++k)  { pot[k].step (r);  s.pot[k] = (uint16_t) pot[k].v; }
 
-        if (r.chance (500)) sw = (uint8_t) (sw ^ (1u << r.below (8)));
+        if (r.chance (500))
+        {
+            const uint32_t bit = r.below (8);
+            if (! (quiet && (bit == 1 || bit == 2))) sw = (uint8_t) (sw ^ (1u << bit));   // scenario 8 never flips the 246/135 switches
+        }
         s.sw = sw;
 
         if (r.chance ((uint32_t) sc.eventOneIn)) s.events |= 1;
@@ -147,6 +165,8 @@ int main (int argc, char** argv)
         }
         s.lock_mask = (uint8_t) lockMask;
         if (r.chance (250)) { lockPressed = 0; if (! r.chance (3)) lockPressed = 1u << r.below (6); }
+        const bool quietIdle = quiet && ! windowOdds (i) && ! windowEvens (i);
+        if (quietIdle) lockPressed = 0;
         s.lock_pressed_mask = (uint8_t) lockPressed;
         if (s.set_lock && r.chance (4)) s.q_locked_mask = (uint8_t) (1u << r.below (6));
         if (lockDownCountdown > 0) { s.lock_down_big = 1; --lockDownCountdown; }
@@ -166,6 +186,7 @@ int main (int argc, char** argv)
                 if (longHold && nearLeft == 0) nearLeft = 40;
             }
         }
+        if (quietIdle) { pinMask = 0; for (int k = 0; k < 6; ++k) pinLeft[k] = 0; }
         s.lock_button_mask = (uint8_t) pinMask;
         if (nearLeft > 0) { s.lock_down_near = 1; --nearLeft; }
 

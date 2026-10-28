@@ -124,18 +124,28 @@ public:
         last = d;
 
         flashAccMs += (double) dtMs;
-        while (flashAccMs >= kRingFlashMs) { flashAccMs -= kRingFlashMs; flash = ! flash; }
+        while (flashAccMs >= kRingFlashMs)
+        {
+            flashAccMs -= kRingFlashMs;
+            flash = ! flash;
+            // One redraw of the firmware (update_LED_ring): calculate_envout_leds runs once. Its COARSE and FINE TUNING branches are
+            // evaluated here, at that rate (the fine tune blink counts these calls); between two redraws the lights keep what it gave.
+            // Milestone 7 step 3b. The play and 1V/oct branches stay live below (Milestone 6b).
+            if (d.valid != 0) envFwActive = envOutLedsFw (d, envFwState, envFw);
+        }
+        if (d.valid == 0) envFwActive = false;
 
         // Lock buttons (leds.c update_lock_leds, play branch): one update every QLOCK_FLASH_SPEED + 1 loop passes; a Q-locked channel
-        // is drawn inverted once in 16 updates. The rate rests on the M2-c placeholder.
+        // is drawn inverted once in 16 updates, and while a clear of the transpositions is staged a transposed channel flashes
+        // (lockLedUpdate, DisplayModel.h). The rate rests on the M2-c placeholder.
         lockAccMs += (double) dtMs;
-        while (lockAccMs >= kLockLedUpdateMs) { lockAccMs -= kLockLedUpdateMs; lockFlash1 = (lockFlash1 + 1) % 16; }
+        while (lockAccMs >= kLockLedUpdateMs) { lockAccMs -= kLockLedUpdateMs; if (d.valid != 0) lockLedUpdate (d, lockLed); }
         for (int c = 0; c < 6; ++c)
         {
-            const bool q = d.valid != 0 && d.qlocked[c] != 0 && lockFlash1 == 0;
-            if (locks[c]->qFlicker != q || locks[c]->flashPhase != flash)
+            const bool q = d.valid != 0 && lockLed.inverted[c];
+            if (locks[c]->inverted != q || locks[c]->flashPhase != flash)
             {
-                locks[c]->qFlicker = q;
+                locks[c]->inverted = q;
                 locks[c]->flashPhase = flash;
                 locks[c]->repaint();
             }
@@ -147,6 +157,7 @@ public:
         {
             ringLeds (d, flash, newRing);
             envOutLeds (d, newEnv);
+            if (envFwActive) std::memcpy (newEnv, envFw, sizeof newEnv);   // calculate_envout_leds took its COARSE or FINE TUNING branch
         }
         if (std::memcmp (newRing, ringLed, sizeof ringLed) != 0)
         {
@@ -371,7 +382,10 @@ private:
     bool flash = false;
     double flashAccMs = 0.0;
     double lockAccMs = 0.0;
-    int lockFlash1 = 0;
+    smr_plugin::LockLedState lockLed;
+    smr_plugin::EnvOutLedState envFwState;
+    uint16_t envFw[6][3] = {};
+    bool envFwActive = false;
     Meter meters[4];
 
     // Trigger k: 0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down, 4 Lock jack 1 3 5, 5 Lock jack 2 4 6. The processor outlives the editor.

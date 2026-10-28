@@ -33,9 +33,14 @@ Nothing here is confirmed until the CI annotations say so; see `docs/status.md`.
 - **P-6 Start-up order (M2-d).** `reset()` runs one main-loop pass and then one TIM10 tick before block 0.
 - **P-7 Search-loop guards.** `update_spread` and `update_motion` have `while(!is_distinct)` loops with no
   bound. The port gives up after 20 steps and counts it in `loop_guard_trips`. No V1 scenario has tripped one.
-- **P-8 Display-only state.** Omitted from `param_read_freq`: `ongoing_fine_tuning`, `fine_envled`,
-  `cur_envled_state`, `saved_envled_state`, `coarse_adj_led`, `old_switch_state` and the display `else if` chain.
-  Nothing that feeds the audio or the Env Out depends on them.
+- **P-8 Display-only state.** Milestone 2 left out `ongoing_fine_tuning`, `fine_envled`, `cur_envled_state`, `saved_envled_state`,
+  `coarse_adj_led`, `old_switch_state` and the display `else if` chain of `param_read_freq`. **Milestone 7 step 3b ported them**
+  (`src/core/Params.cpp`, members in `Engine.h`, `coarseLadder` also sets `cur_envled_state`; `ongoing_coarse_tuning`, `fine_tuning_timeout`
+  and `fine_timer` with them). Nothing that feeds the audio or the Env Out jacks reads them. V1 compares all of them with the unmodified firmware
+  (`tests/oracle/trace_common.h`), and scenario 8 (`gen_stimulus.cpp`) holds the Nudge controls still long enough for the 12000 and 25000 tick timeouts
+  to run out. Times: TIM10 ticks, `Constants.h kDisplayTime*`. The light rules themselves (`led_ring.c calculate_envout_leds` COARSE and FINE TUNING
+  branches, `leds.c update_lock_leds` flash) are in `src/plugin/DisplayModel.h`, not in the core. Not in the plugin at all: the scale display
+  branch (rotary), `ui_mode` other than PLAY.
 - `usat #12` in `FreqCoef_to_PWMval` is a clamp to 4095. In the oracle build, the same line is compiled through
   `-Dasm(...)=result=oracle_usat12(result)` (x86 cannot assemble `usat`).
 - The coarse-tuning ladder is written twice in `param_read_freq`; the port shares it as `coarseLadder()` and keeps

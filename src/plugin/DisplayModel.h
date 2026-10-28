@@ -4,7 +4,9 @@
 //
 // Rules ported from third_party/SMR (v5.1.1, 79bc953), see docs/m6b-led-notes.md:
 //   led_ring.c   display_filter_rotation()   ring            -> ringLeds()
-//   led_ring.c   calculate_envout_leds()     Env Out lights  -> envOutLeds()
+//   led_ring.c   calculate_envout_leds()     Env Out lights  -> envOutLeds() (play and 1V/oct) and envOutLedsFw() (COARSE TUNING and FINE
+//                                                                      TUNING branches, Milestone 7 step 3b)
+//   leds.c       update_lock_leds()          Lock button LEDs -> lockLedUpdate() (Q-lock flicker and the flash while a clear is staged)
 //   led_ring.c   DEFAULT_COLOR_CH[0]         colours         -> kColours
 //   leds.c       update_slider_LEDs()        slider LED duty -> sliderLedDuty()
 //   filter.c     process_audio_block()       slider clip     -> sliderClipBits()
@@ -56,6 +58,19 @@ namespace smr_plugin
         float    morph[6] = {};           // motion_morphpos
         float    level[6] = {};           // channel_level
         uint32_t envPwm[6] = {};          // ENVOUT_PWM, 0..4095
+        // Milestone 7 step 3b: what calculate_envout_leds (COARSE and FINE TUNING branches) and update_lock_leds read.
+        uint32_t isBpre = 0;              // filter_type == BPRE (those two branches are skipped)
+        uint32_t mod135One = 0;           // MOD135 (dig_inouts.h): the 135 | 1 switch is at "1" (mod_mode_135 == 1)
+        uint32_t mod246Six = 0;           // MOD246: the 6 | 246 switch is at "6" (mod_mode_246 == 6)
+        uint32_t ongoingCoarse[2] = {};   // ongoing_coarse_tuning
+        uint32_t ongoingFine[2] = {};     // ongoing_fine_tuning
+        uint32_t fineTimeout[2] = {};     // fine_tuning_timeout
+        int32_t  curEnvled = 0;           // cur_envled_state
+        int32_t  fineEnvled = 0;          // fine_envled
+        uint32_t numClearStaged = 0;      // num_clear_coarse_staged
+        float    freqNudge[6] = {};       // freq_nudge
+        float    coarseAdj[6] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };      // coarse_adj
+        float    coarseAdjLed[6] = {};    // coarse_adj_led
     };
     static_assert (std::is_trivially_copyable<DisplayData>::value, "DisplayData is copied word by word");
     static_assert (sizeof (DisplayData) % 4 == 0, "DisplayData is a whole number of 32-bit words");
@@ -130,7 +145,22 @@ namespace smr_plugin
             d.morph[j]   = e.motion_morphpos[j];
             d.level[j]   = e.channel_level[j];
             d.envPwm[j]  = e.ENVOUT_PWM[j];
+            d.freqNudge[j] = e.freq_nudge[j];
+            d.coarseAdj[j] = e.coarse_adj[j];
+            d.coarseAdjLed[j] = e.coarse_adj_led[j];
         }
+        d.isBpre = (e.filter_type == smr::BPRE) ? 1u : 0u;
+        d.mod135One = (e.mod_mode_135 == 1) ? 1u : 0u;
+        d.mod246Six = (e.mod_mode_246 == 6) ? 1u : 0u;
+        for (int s = 0; s < 2; ++s)
+        {
+            d.ongoingCoarse[s] = e.ongoing_coarse_tuning[s];
+            d.ongoingFine[s] = e.ongoing_fine_tuning[s];
+            d.fineTimeout[s] = e.fine_tuning_timeout[s];
+        }
+        d.curEnvled = e.cur_envled_state;
+        d.fineEnvled = e.fine_envled;
+        d.numClearStaged = e.num_clear_coarse_staged;
     }
 
     // filter.c process_audio_block, end of block: f_blended from the first frame of the block, times channel_level, against
@@ -230,6 +260,143 @@ namespace smr_plugin
                 env[chan][c] = (uint16_t) (kColours[chan][c] * amt);
                 if (env[chan][c] > 1023) env[chan][c] = 1023;
             }
+        }
+    }
+
+    // Float to uint16_t, as the firmware's assignments `env_out_leds[i][c] = <float expression>` do. In range this is the C truncation.
+    // Out of range the C is undefined (docs/open-questions.md M7-h): above 65535 and for NaN nothing here depends on it, below 0 this
+    // gives 0 (what a saturating conversion gives, and what Bryn saw on his SMR: the light stays blue at the top of the Nudge range).
+    // PROVISIONAL until M7-h is settled.
+    inline uint16_t fwU16 (float v) noexcept
+    {
+        if (! (v > 0.0f)) return 0;
+        if (v >= 65535.0f) return 65535;
+        return (uint16_t) v;
+    }
+
+    // calculate_envout_leds keeps two statics for the fine tune display: fine_flash[6] (starts at 1). One call of envOutLedsFw is one call
+    // of the firmware function, which runs once per ring redraw (update_LED_ring, every 2001 main-loop passes: kRingFlashMs).
+    struct EnvOutLedState
+    {
+        int8_t fineFlash[6] = { 1, 1, 1, 1, 1, 1 };
+    };
+
+    // led_ring.c calculate_envout_leds(): the COARSE TUNING and FINE TUNING branches, in the firmware's order of tests. The scale display
+    // branch before them needs the rotary switch and cannot be reached in the plugin (no rotary: scale_display_timer stays 0, user_turned_rotary 0),
+    // ui_mode is always PLAY. Returns true and fills env when one of the two branches took over; returns false and leaves env alone otherwise
+    // (the firmware's `else` branch: play or 1V/oct, envOutLeds()).
+    inline bool envOutLedsFw (const DisplayData& d, EnvOutLedState& st, uint16_t env[6][3]) noexcept
+    {
+        // COARSE TUNING: red for transposition down, blue for up
+        if ((d.ongoingCoarse[0] != 0 || d.ongoingCoarse[1] != 0) && d.isBpre == 0)
+        {
+            if (d.curEnvled == 12)          // no coarse adjustment: three red, three blue
+            {
+                for (int i = 0; i < 3; ++i) { env[i][0] = 1023; env[i][1] = 0; env[i][2] = 0; }
+                for (int i = 3; i < 6; ++i) { env[i][0] = 0; env[i][1] = 100; env[i][2] = 1023; }
+            }
+            else
+            {
+                const int positive_coarse = (d.curEnvled > 64) ? 0 : 1;
+                for (int i = 0; i < 6; ++i)
+                {
+                    if (((d.curEnvled & (1 << (5 - i))) >> (5 - i)) != 0)
+                    {
+                        env[i][0] = (uint16_t) (1023 * (1 - positive_coarse));
+                        env[i][1] = (uint16_t) (100 * positive_coarse);
+                        env[i][2] = (uint16_t) (1023 * positive_coarse);
+                    }
+                    else { env[i][0] = 0; env[i][1] = 0; env[i][2] = 0; }
+                }
+            }
+            return true;
+        }
+
+        // FINE TUNING
+        if (d.isBpre == 0 && (d.ongoingFine[0] != 0 || d.ongoingFine[1] != 0 || d.fineTimeout[0] != 0 || d.fineTimeout[1] != 0))
+        {
+            for (int i = 0; i < 6; ++i)
+            {
+                if (st.fineFlash[i] > 1) st.fineFlash[i]--;
+                else if (st.fineFlash[i] < -1) st.fineFlash[i]++;
+
+                // update led for channels that are being adjusted
+                if ((d.fineEnvled & (1 << (5 - i))) != 0)
+                {
+                    // led brightness
+                    const float finetune_bright = (d.freqNudge[i] / d.coarseAdj[i] - 1.0f) * 14.3f;   // 0-1
+
+                    // flash/dim channels that are not controlled by the nudge pot because of the 135 and 246 switches, or locked by buttons
+                    if ((d.mod135One != 0 && (i == 2 || i == 4)) || (d.mod246Six != 0 && (i == 1 || i == 3)) || d.lock[i] != 0)
+                    {
+                        if (st.fineFlash[i] < 0) st.fineFlash[i] = 5;
+
+                        if ((st.fineFlash[i] & 1) != 0)
+                        {
+                            env[i][0] = fwU16 (75.0f * (1.0f - finetune_bright));
+                            env[i][1] = fwU16 (75.0f * (1.0f - finetune_bright));
+                            env[i][2] = 75;
+                        }
+                        else
+                        {
+                            env[i][0] = fwU16 (1023.0f * (1.0f - finetune_bright));
+                            env[i][1] = fwU16 (1023.0f * (1.0f - finetune_bright));
+                            env[i][2] = 1023;
+                        }
+                    }
+                    // channels not locked
+                    else
+                    {
+                        if (st.fineFlash[i] > 0) st.fineFlash[i] = -5;
+
+                        if ((st.fineFlash[i] & 1) != 0)
+                        {
+                            env[i][0] = fwU16 (1023.0f * (1.0f - finetune_bright));
+                            env[i][1] = fwU16 (1023.0f * (1.0f - finetune_bright));
+                            env[i][2] = 1023;
+                        }
+                        else
+                        {
+                            env[i][0] = fwU16 (75.0f * (1.0f - finetune_bright));
+                            env[i][1] = fwU16 (75.0f * (1.0f - finetune_bright));
+                            env[i][2] = 75;
+                        }
+                    }
+
+                    if (env[i][0] > 1023) env[i][0] = 1023;
+                    if (env[i][1] > 1023) env[i][1] = 1023;
+                    if (env[i][2] > 1023) env[i][2] = 1023;
+                }
+                // turn off channels that aren't being adjusted
+                else { env[i][0] = 0; env[i][1] = 0; env[i][2] = 0; }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // leds.c update_lock_leds(), play branch: one update every QLOCK_FLASH_SPEED + 1 passes (kLockLedUpdateMs). `inverted[i]` says that the
+    // LED shows the opposite of lock[i] until the next update. Statics of the firmware: flash1 and flash2 (both start at 0).
+    struct LockLedState
+    {
+        uint32_t flash1 = 0, flash2 = 0;
+        bool inverted[6] = {};
+    };
+
+    inline void lockLedUpdate (const DisplayData& d, LockLedState& st) noexcept
+    {
+        // FLASHING: qlock
+        if (++st.flash1 >= 16) st.flash1 = 0;
+        for (int i = 0; i < 6; ++i)
+            st.inverted[i] = d.qlocked[i] != 0 && st.flash1 == 0;
+
+        // Clear coarse tuning: if any coarse tuning is staged to be cleared, every LED is decided again here (the Q-lock flicker is
+        // not shown while it lasts), and a channel with a transposition (coarse_adj_led != 1.0) flashes.
+        if (d.numClearStaged != 0)
+        {
+            if (++st.flash2 >= 5) st.flash2 = 0;
+            for (int i = 0; i < 6; ++i)
+                st.inverted[i] = (d.coarseAdjLed[i] != 1.0f) && st.flash2 == 0;
         }
     }
 }

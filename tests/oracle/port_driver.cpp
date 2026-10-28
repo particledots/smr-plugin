@@ -58,6 +58,16 @@ static void emitState (Trace& t, const smr::Engine& e)
     v.envTrackMode = (uint32_t) e.env_track_mode;
     v.levelLpf = e.CHANNEL_LEVEL_LPF;
     v.fMorph = e.f_morph;
+    v.ongoingCoarse = e.ongoing_coarse_tuning;
+    v.ongoingFine = e.ongoing_fine_tuning;
+    v.fineTimeout = e.fine_tuning_timeout;
+    v.fineTimer = e.fine_timer;
+    v.savedEnvled = (const int32_t*) e.saved_envled_state;
+    v.curEnvled = e.cur_envled_state;
+    v.fineEnvled = e.fine_envled;
+    v.coarseAdj = e.coarse_adj;
+    v.coarseAdjLed = e.coarse_adj_led;
+    v.numClearStaged = e.num_clear_coarse_staged;
     emit (t, v);
 }
 
