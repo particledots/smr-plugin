@@ -269,3 +269,9 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - **Mismatch 1 (open):** 2.2 going up from 0%, the first step came at about "9 o'clock" and Bryn counted 9 or 10 steps (hard to tell). The sheet expects the first step in the middle (46 to 54%) and 6 steps. One possible cause is a transposition left on channel 1 from earlier use of the same plugin instance (the zone to cross is `saved_coarse_adj`), not yet checked.
 - **Mismatch 2 (open):** 1.2 fine tune by ear: C# at 0%, D at 50%, D# at 100%, "about a semitone more on each click". Expected from the source: about +63 cents at 50% and +124 cents at 100%. Not measured in cents yet.
 - Follow-up test sheet sent in chat (2026-10-28): fine tune in cents at 0, 25, 50, 75, 100%; and 2.2 again on a fresh plugin instance.
+
+### Milestone 7 step 3a follow-up (Bryn, **Intel Mac**, same build, fresh plugin instance, 2026-10-28)
+- Fine tune in cents (channel 1, no Lock, tuner): 0% = C; 25% = C about +35 cents; 50% = C# about -35 cents (about +65); 75% = C# (about +100); 100% = C# about +30 cents (about +130). Source expectation: +32, +63, +94, +124 cents. Agrees within what the tuner reading allows. The earlier "D then D#" in step 1.2 was a by-ear misread; mismatch 1 is closed.
+- Transposition going up from 0% on a fresh instance: first step between noon and 1 o'clock, 6 steps. Matches the source. Mismatch 2 is closed; the earlier early start fits a transposition left on channel 1 from earlier use of that instance (not proven, but the fresh instance behaves as the firmware does).
+- Not answered: 6.2 (does a 2 second hold of all six Locks clear the transpositions, and does any Lock light). Only bears on M1-c (2 s in the manual, about 3 s in the source count).
+- Step 3a accepted on the Intel Mac. M4 mac mini not tested. Next: step 3b (Env Out lights for fine tune and transposition, Lock flash while a clear is staged).
