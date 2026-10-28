@@ -254,3 +254,11 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - 7 Save and reopen: with 2, 4, 6 lit, after save, close and reopen of the Logic project 2, 4, 6 were still lit and did not toggle at load; Lock evens once darkened them.
 - 8 Automation list: "Lock 1 3 5 (trigger)" and "Lock 2 4 6 (trigger)" are both listed.
 - Not tested: the M4 mac mini. Still open: M7-f (rising edge versus firmware acting after the pulse), the step 1 cosmetic (inner ring on a shift-held Lock button does not flash). The temporary "triggers sent/seen" line stays until Bryn says the M4 mac mini 6a test is done.
+
+## Milestone 7, step 3: fine tune and transposition (started 2026-10-28; no code change yet)
+
+- Firmware and manual read (docs/open-questions.md M7-g): `params.c param_read_freq` (fine tune `1 + t/55000`, 13-zone transposition while `lock_pressed[j]`, clear by `lock_down[] > 36000`), manual p.11-12. The SMR has no separate Transpose jack; transposition is Lock button held plus the Freq Nudge knob of that side.
+- The audio is already in the core (M2 port, V1 oracle covers it) and the host parameters exist (`nudgeodds`, `nudgeevens`, Lock hold). Nothing in the plugin has been listened to for this yet.
+- Step 3a (now): listening test on the existing build, sheet docs/testing-milestone-7c.md. No new CI run.
+- Step 3b (after the result): the Env Out light display for fine tune and transposition and the Lock button flash while a clear is staged (display state omitted from the core in P-8).
+- The temporary "triggers sent/seen" line stays until Bryn says the M4 mac mini 6a test is done.
