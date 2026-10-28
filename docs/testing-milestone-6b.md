@@ -24,8 +24,8 @@ Install the newest build as in docs/testing-milestone-6a.md section 1. Write dow
 3. Pre | Post: with Post, a slider at the bottom keeps its light dark.
 
 ## 5. Clip LED and meters
-1. Raise the track level until the yellow clip LED lights. Write down the peak the Logic channel strip meter shows when it first lights. I expect about -3 dBFS (0.6875 of full scale) from the code.
-2. Make the input only negative-going (invert phase on the track, or send a signal with a big negative swing): tell me if the clip LED lights. By the source it should not.
+1. (Optional, only if you want to) Turn the track volume up while music plays. When the yellow clip light first comes on, look at the number on the Logic channel meter and tell me it. I expect about -3. If that is confusing, skip it: it stays marked unconfirmed.
+2. (Removed: CI already tests that a negative-only input does not light the clip LED, `testDisplay` in tests/plugin_tests.cpp. Nothing for Bryn to do.)
 3. The In bars move with the input, the Out bars with the output, the thin line holds the peak for about a second.
 4. Stop playback: the bars fall to empty.
 
