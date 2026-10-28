@@ -233,7 +233,7 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - Hold time, stopwatch (Bryn, screenshot): 3.85 s from the shift-click to Lock 4 going dark. Offline core measurement 4.167 s (50000 passes at 12 kHz, local build, not CI). The 0.3 s difference is within start/stop error by hand; his first count (2 to 3 s) was a hand count. M7-a stands at the 12 kHz placeholder.
 - Open: while shift-held, the inner ring on the Lock button stays visible instead of flashing (Bryn, step 2.1); the hold itself works. Cause not found. Not yet tested: the M4 mac mini.
 
-## Milestone 7, step 2: Lock jacks (started 2026-10-27, NOT built by CI yet, NOT tested by Bryn)
+## Milestone 7, step 2: Lock jacks (started 2026-10-27, built by CI, passed on the Intel Mac only; M4 mac mini NOT tested)
 
 - Firmware read (docs/open-questions.md M7-f): `params.c process_lock_jacks` inverts `lock[0]` (and `lock[2]`, `lock[4]` when `mod_mode_135 == 135`) on `do_LOCK135`, and `lock[5]` (and `lock[1]`, `lock[3]` when `mod_mode_246 == 246`) on `do_LOCK246`; nothing else. `dig_inouts.c debounce_trigger_inputs` sets the flags at the end of a pulse, the manual says rising edge (M7-f, not resolved).
 - Code: two new trigger parameters `lockjack135` and `lockjack246` (49 in total, appended at the end; `ParamMap.h/.cpp`, `Role::LockJackOdds`, `Role::LockJackEvens`); `ParamApplier::apply` calls `Engine::triggerLock135()` and `triggerLock246()` on a rising edge; trigger counters extended from 4 to 6 (`PluginProcessor`, `Status::trigSeen[6]`); window: "Lock odds" and "Lock evens" buttons under the Freq knobs (`PluginEditor.cpp`), the temporary sent/seen line shows six triggers. `src/core` is not changed: `Engine.cpp process_lock_jacks` and the V1 events for the jacks already existed.
@@ -241,3 +241,16 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - Local pre-checks only (g++ on Linux, not CI): `smr_core_tests` 85 checks and `smr_param_tests` 110 checks, 0 failed; fixed-render hash fee74c946b3031c0 (unchanged). The JUCE code (editor buttons, processor, `testLockJackSync`) has not been compiled yet: JUCE is built by CI only.
 - Test sheet: docs/testing-milestone-7b.md.
 - CI result (build run 40641849028, commit 7ad84ab; all three jobs success: core-macos, build-macos, oracle-linux): plugin builds as AU and VST3, universal, minos 12.0 on both slices; `auval` exit 0; `smr_core_tests` 85 checks and `smr_param_tests` 110 checks, 0 failed on linux, arm64 and x86-64; fixed-render hash fee74c946b3031c0 identical on arm64 and x86-64 (V4); `smr_plugin_tests selftest` on arm64 67 checks, 0 failed, including the new lock jack checks; V1 scenarios 0 to 7 identical and the V1 negative control detects a change. The first run on commit de3a799 (run 40641672409) failed to compile `tests/plugin_tests.cpp` (my `fmt` call had six values, the helper takes four); fixed in 7ad84ab, nothing else changed. Not confirmed: the x86_64 (Rosetta) plugin check count (annotation limit), how the window looks and behaves, anything on a real Mac. The Capture analysis (Milestone 3) run was still in progress when this was written.
+
+### Milestone 7 step 2 test (Bryn, **Intel Mac**, build run 40641849028, commit 7ad84ab, 2026-10-28; the M4 mac mini has not tested this build)
+- Sheet docs/testing-milestone-7b.md, all sections matched, nothing failed.
+- Start state (switches at 1.3.5 and 2.4.6, all six Lock buttons dark): yes.
+- 1 Lock odds: Lock 1, 3, 5 light together and go dark on the second click; 2, 4, 6 stay dark. No sound change heard (as expected with no input-dependent check; not an error).
+- 2 Lock evens: Lock 2, 4, 6 light and go dark together.
+- 3 Switches: with the left switch at "1" only Lock 1 toggles; with the right switch at "6" only Lock 6 toggles.
+- 4 Each channel inverts on its own: with Lock 3 lit, Lock odds darkens 3 and lights 1 and 5; again gives back 3 lit, 1 and 5 dark.
+- 5 Locked channels stay put: with 1, 3, 5 locked, three Rotate trig (right) clicks moved 2, 4, 6 and left 1, 3, 5 in place (by ear).
+- 6 Fast clicking: six quick clicks on Lock odds, "Lock 135" sent/seen 36/36, Lock 1, 3, 5 ended dark.
+- 7 Save and reopen: with 2, 4, 6 lit, after save, close and reopen of the Logic project 2, 4, 6 were still lit and did not toggle at load; Lock evens once darkened them.
+- 8 Automation list: "Lock 1 3 5 (trigger)" and "Lock 2 4 6 (trigger)" are both listed.
+- Not tested: the M4 mac mini. Still open: M7-f (rising edge versus firmware acting after the pulse), the step 1 cosmetic (inner ring on a shift-held Lock button does not flash). The temporary "triggers sent/seen" line stays until Bryn says the M4 mac mini 6a test is done.
