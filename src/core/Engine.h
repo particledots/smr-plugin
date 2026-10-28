@@ -76,6 +76,8 @@ namespace smr
 
         uint8_t  lock[kNumChannels] = {};
         uint8_t  lock_pressed[kNumChannels] = {};
+        uint8_t  lock_up[kNumChannels] = {};        // params.c: counts main-loop passes after a button release (the release is handled when it passes 5)
+        uint8_t  lock_button[kNumChannels] = {};    // LOCKBUTTON(i) (dig_inouts.c): the Lock button pin, 1 while pressed. Set by the host with setLockButton().
         uint32_t lock_down[kNumChannels] = {};
         uint8_t  num_clear_coarse_staged = 0;
         uint8_t  already_handled_lock_release[kNumChannels] = {};
@@ -257,8 +259,10 @@ namespace smr
         // changes nothing if mask has bits above bit 19 or more than 14 bits set.
         bool setFreqBlock (uint32_t mask) noexcept;
 
-        // Plain inputs. The lock-button state machines are Milestone 7.
-        // Out-of-range channel numbers are ignored.
+        // Plain inputs. Out-of-range channel numbers are ignored.
+        // setLockButton: the Lock button pin. The main loop's process_lock_buttons() (Milestone 7) turns presses into lock_pressed[],
+        // lock[] and q_locked[] exactly as the firmware does. setLock, setLockPressed and setLockDown write the state directly (tests).
+        void setLockButton (int ch, bool pressed) noexcept { if ((unsigned) ch < (unsigned) kNumChannels) lock_button[ch] = pressed ? 1 : 0; }
         void setLock (int ch, bool v) noexcept         { if ((unsigned) ch < (unsigned) kNumChannels) lock[ch] = v ? 1 : 0; }
         void setLockPressed (int ch, bool v) noexcept  { if ((unsigned) ch < (unsigned) kNumChannels) lock_pressed[ch] = v ? 1 : 0; }
         void setLockDown (int ch, uint32_t n) noexcept { if ((unsigned) ch < (unsigned) kNumChannels) lock_down[ch] = n; }
@@ -266,7 +270,8 @@ namespace smr
 
         // Lock button released in PLAY mode (params.c process_lock_buttons, release branch): latching on sets
         // lock[] and clears motion_spread_dir[]; latching off clears lock[] and q_locked[]. Does nothing if the
-        // channel is already in that state. The hold gestures (Q-lock, coarse tuning) are Milestone 7.
+        // channel is already in that state. This is a tap that skips the press and release timing; the hold gestures
+        // (Q-lock, coarse tuning, hold to unlock) go through setLockButton() and process_lock_buttons().
         void setLockLatched (int ch, bool on) noexcept;
 
         // The bank chosen with ROTATE held, applied on release (params.c process_rotary_button, ui_mode PLAY):
@@ -299,6 +304,7 @@ namespace smr
         void process_rotateCV();
         void process_scaleCV();
         void process_lock_jacks();
+        void process_lock_buttons();
         void init_freq_lpf();
         void set_default_user_scalebank();
 

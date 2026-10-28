@@ -98,7 +98,7 @@ namespace
 
     void testTable()
     {
-        check (kNumParams == 41, "parameter count is 41", fmt ("%.0f", kNumParams));
+        check (kNumParams == 47, "parameter count is 47", fmt ("%.0f", kNumParams));
 
         bool unique = true, ranges = true, names = true, no4ms = true;
         for (int i = 0; i < kNumParams; ++i)
@@ -402,6 +402,25 @@ namespace
             r.e->q_locked[1] = 1;
             r.p ("lock2") = 0.0f; r.run (2);
             check (r.e->lock[1] == 0 && r.e->q_locked[1] == 0 && r.e->lock[4] == 1, "unlocking clears lock[] and q_locked[] (firmware release branch)");
+        }
+
+        // Milestone 7: the Lock hold parameters drive the Lock button pins (params.c process_lock_buttons).
+        {
+            Rig r;
+            r.start(); r.run (800);   // param_read_q's pot LPF starts at 0 and converges slowly; a Lock held meanwhile would Q-lock (params.c)
+            r.p ("lockhold1") = 1.0f; r.run (60);
+            check (r.e->lock_pressed[0] == 1 && r.e->lock[0] == 0, "Lock 1 Hold on: the button counts as pressed, nothing toggles yet");
+            r.p ("lockhold1") = 0.0f; r.run (60);
+            check (r.e->lock[0] == 1 && r.e->lock_pressed[0] == 0, "Lock 1 Hold released (a tap): the core toggles lock[0] on");
+            uint32_t vals = 0;
+            const uint32_t mask = ParamApplier::coreLockChanges (*r.e, r.v, &vals);
+            check (mask == 1u && vals == 1u, "the tap is reported as a core-originated change for the Lock 1 parameter", fmt ("%.0f %.0f", (double) mask, (double) vals));
+            r.p ("lock1") = 1.0f; r.run (2);   // what the message-thread sync does with that report
+            check (ParamApplier::coreLockChanges (*r.e, r.v, nullptr) == 0u && r.e->lock[0] == 1, "after the Lock 1 parameter follows, no change is reported and the lock stays on");
+            r.p ("lockhold1") = 1.0f; r.run (60);
+            r.p ("lockhold1") = 0.0f; r.run (60);
+            check (r.e->lock[0] == 0 && ParamApplier::coreLockChanges (*r.e, r.v, &vals) == 1u && vals == 0u,
+                   "a second tap unlocks in the core and is reported with value 0");
         }
 
         // Bank applies to unlocked channels only (process_rotary_button release branch).

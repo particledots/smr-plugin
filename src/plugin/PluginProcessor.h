@@ -11,11 +11,11 @@
 #include "DisplayModel.h"
 #include "ParamMap.h"
 
-class SmrAudioProcessor : public juce::AudioProcessor
+class SmrAudioProcessor : public juce::AudioProcessor, private juce::Timer
 {
 public:
     SmrAudioProcessor();
-    ~SmrAudioProcessor() override = default;
+    ~SmrAudioProcessor() override { stopTimer(); }
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override {}
@@ -61,6 +61,10 @@ public:
     // block, read by the editor; nothing flows back (docs/m6b-led-notes.md).
     smr_plugin::DisplayHub& displayHub() noexcept { return display; }
 
+    // Milestone 7: copies lock[] changes made by the core (Lock button tap or hold, Lock jacks) into the host Lock parameters.
+    // Message thread only. Runs from a timer; public so the headless tests can call it. docs/open-questions.md M7-b.
+    void syncLockParameters();
+
     // Resonators ring after the input stops; hosts use this to keep rendering a bounce (docs/open-questions.md M4-g).
     static constexpr double kTailSeconds = 10.0;
 
@@ -77,6 +81,10 @@ private:
     smr_plugin::ParamApplier applier;
     std::vector<float> scratch;     // second output slot when the host output is mono
     smr_plugin::DisplayHub display;
+
+    void timerCallback() override { syncLockParameters(); }
+    std::atomic<uint32_t> lockSyncMask { 0 };      // channels whose lock[] the core changed (written by the audio thread)
+    std::atomic<uint32_t> lockSyncValues { 0 };    // their new values
 
     // Hand-off between the message thread (project load and save) and the audio thread. Try-locks on the audio side.
     juce::SpinLock stateLock;

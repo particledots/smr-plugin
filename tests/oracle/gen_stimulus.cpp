@@ -42,6 +42,11 @@ int main (int argc, char** argv)
     const int scenario = std::atoi (argv[1]);
     const int n = std::atoi (argv[2]);
     Rng r (0x1234567u + (uint32_t) scenario * 7919u);
+    // Milestone 7: the Lock button pins come from a second generator, so the stimulus of Milestone 2 (everything above) is unchanged.
+    Rng rb (0x4C0CB077u + (uint32_t) scenario * 104729u);
+    uint32_t pinMask = 0;
+    int pinLeft[6] = {};          // steps left until each pressed button is released
+    int nearLeft = 0;             // steps left of the "lock_down just under the Q-unlock time" shortcut
 
     // scenario table: filter mode (2 TWOPASS, 3 ONEPASS), type (1 MAXQ, 0 BPRE), walker speed, bank interval, event rate (one in N steps)
     struct Sc { int mode, type, speed, bankEvery, eventOneIn, amp; bool randomTicks, extremes, switching; };
@@ -82,6 +87,7 @@ int main (int argc, char** argv)
     int lockDownCountdown = 0;
     int tim10Acc = 0, tim9Acc = 0;   // realistic schedule: per block 3.416 TIM10 ticks, 0.933 TIM9 ticks, 2 loop passes
     int mode = sc.mode, type = sc.type;
+    uint8_t curBank[6] = {};   // the banks the firmware has after this step's sets (Milestone 7: see the BpRe one-pass rule below)
 
     for (int i = 0; i < n; ++i)
     {
@@ -123,6 +129,15 @@ int main (int argc, char** argv)
             s.bank[ch] = (uint8_t) r.below (20);
         }
 
+        for (int k = 0; k < 6; ++k) if ((s.set_bank_mask >> k) & 1) curBank[k] = s.bank[k];
+        // Milestone 7: one-pass BpRe has no branch for bank 19 (the user bank) in filter.c, so the firmware keeps whatever table pointer the channel
+        // had. When the switch into one-pass BpRe happens with a MAXQ pointer there, the firmware reads a 231-float table with the 693-float BpRe
+        // layout, past its end (docs/port-notes.md P-10). The oracle and the port read different memory there, so the stimulus never makes that switch
+        // with a channel on bank 19. (The scenarios that stay on one-pass BpRe from step 0 are unaffected: their stale pointers are BpRe tables.)
+        if (sc.switching && s.set_filter_type == 1 && s.set_filter_mode == 3)
+            for (int k = 0; k < 6; ++k)
+                if (curBank[k] == 19) { s.set_bank_mask |= (uint8_t) (1u << k); s.bank[k] = 18; curBank[k] = 18; }
+
         // locks (latched by the main loop's lock jacks, so only set now and then) and lock buttons (momentary)
         if (r.chance (600))
         {
@@ -136,6 +151,23 @@ int main (int argc, char** argv)
         if (s.set_lock && r.chance (4)) s.q_locked_mask = (uint8_t) (1u << r.below (6));
         if (lockDownCountdown > 0) { s.lock_down_big = 1; --lockDownCountdown; }
         else if (r.chance (2500)) lockDownCountdown = 40;
+
+        // Lock button pins (Milestone 7). A press lasts 1 to 60 steps (the firmware debounces 5 loop passes down and 5 up, about 3 steps);
+        // one press in six is a long hold, with the shortcut that sets lock_down just under LOCK_BUTTON_QUNLOCK_HOLD_TIME for a stretch,
+        // so that the "hold to unlock, keep Q-lock" branch is reached in 30000 steps (50000 passes would take 25000 steps).
+        for (int k = 0; k < 6; ++k)
+        {
+            if (pinLeft[k] > 0 && --pinLeft[k] == 0) pinMask &= ~(1u << k);
+            else if (pinLeft[k] == 0 && rb.chance (500))
+            {
+                const bool longHold = rb.chance (6);
+                pinLeft[k] = longHold ? (int) rb.range (60, 120) : (int) rb.range (1, 60);
+                pinMask |= 1u << k;
+                if (longHold && nearLeft == 0) nearLeft = 40;
+            }
+        }
+        s.lock_button_mask = (uint8_t) pinMask;
+        if (nearLeft > 0) { s.lock_down_near = 1; --nearLeft; }
 
         // freqblock: at most 8 of the 20 positions
         if (r.chance (1500))

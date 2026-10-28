@@ -64,3 +64,5 @@ Nothing here is confirmed until the CI annotations say so; see `docs/status.md`.
 - Ticks are carried in the stimulus, so V1 does not cover the scheduler; the scheduler has its own test.
 - Stimulus limits, because the oracle's behaviour is undefined outside them: Q controls move slowly and are capped
   at 3700 in two-pass scenarios (P-5); banks stay 0..19; scenarios 4 and 7 saturate and are compared up to that block.
+
+- P-10: one-pass BpRe selected while a channel is on bank 19 and the previous pointers were MAXQ: out-of-range table read in `filter.c`. See docs/open-questions.md P-10.

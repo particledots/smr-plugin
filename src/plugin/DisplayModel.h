@@ -36,6 +36,8 @@ namespace smr_plugin
     // The ring redraws every 2001 main-loop passes in the firmware (led_ring.c update_LED_ring); the locked-channel flash toggles
     // once per redraw. The main-loop rate is the placeholder of docs/open-questions.md M2-c (smr::kLoopRateHz), so this is a placeholder too.
     constexpr double kRingFlashMs = 2001.0 * 1000.0 / (double) smr::kLoopRateHz;
+    // leds.c update_lock_leds: one update every QLOCK_FLASH_SPEED + 1 (1501) loop passes (params.h QLOCK_FLASH_SPEED 1500).
+    constexpr double kLockLedUpdateMs = 1501.0 * 1000.0 / (double) smr::kLoopRateHz;
 
     // led_ring.c DEFAULT_COLOR_CH[0] (cur_colsch = 0): red, green, blue per channel, 12 bit duty values.
     constexpr float kColours[6][3] = {

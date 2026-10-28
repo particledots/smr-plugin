@@ -51,10 +51,12 @@ void set_default_user_scalebank (void)
     }
 }
 
-// Stubs for the parts of params.c that the port does not include (button state machines, UI)
+// Stubs for the parts of params.c that the port does not include (UI, System Mode). LOCKBUTTON follows the stimulus (Milestone 7).
 void LOCKLED_ON (int led) { (void) led; }
 void LOCKLED_OFF (int led) { (void) led; }
-uint8_t LOCKBUTTON (uint8_t x) { (void) x; return 0; }
+static uint32_t oracle_lock_pins = 0;   // bit i: Lock button i pressed (the stimulus sets it each step)
+void oracle_set_lock_buttons (uint32_t mask) { oracle_lock_pins = mask; }
+uint8_t LOCKBUTTON (uint8_t x) { return (uint8_t) ((oracle_lock_pins >> x) & 1u); }
 void update_slider_LEDs (void) {}
 uint8_t read_rotary (void) { return 0; }
 void factory_reset (void) {}

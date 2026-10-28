@@ -47,6 +47,9 @@ static void emitState (Trace& t, const smr::Engine& e)
     v.shift = e.freq_shift;
     v.level = e.channel_level;
     v.lock = e.lock;
+    v.lockPressed = e.lock_pressed;
+    v.qLocked = e.q_locked;
+    v.lockDown = e.lock_down;
     v.motionRotate = e.motion_rotate;
     v.motionNotejump = e.motion_notejump;
     v.spread = e.spread;
@@ -89,8 +92,11 @@ static int runTrace (const char* stimPath, const char* outPath)
             e->lock_pressed[k] = (s.lock_pressed_mask >> k) & 1;
             e->lock_down[k] = s.lock_down_big ? 40000u : 0u;
         }
+        if (s.lock_down_near)
+            for (int k = 0; k < 6; ++k) e->lock_down[k] = 49990u;
         e->freqblock = s.freqblock;
 
+        for (int k = 0; k < 6; ++k) e->setLockButton (k, (s.lock_button_mask >> k) & 1);
         e->setControls (controlsOf (s));
         if (s.events & 1) e->triggerRotateUp();
         if (s.events & 2) e->triggerRotateDown();

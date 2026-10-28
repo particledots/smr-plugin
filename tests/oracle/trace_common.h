@@ -35,10 +35,13 @@ namespace smrtest
         uint8_t  tim9, tim10, loop; // ticks to run after the block, in the order TIM9, TIM10, loop
         int32_t  inL[16];
         int32_t  inR[16];
+        // Milestone 7 (appended, so the offsets above did not move): the Lock button pins and a hold-time shortcut.
+        uint8_t  lock_button_mask;  // LOCKBUTTON(i) = bit i: the pin state seen by process_lock_buttons() in every loop pass of this step
+        uint8_t  lock_down_near;    // 1: lock_down[0..5] = 49990 (just under LOCK_BUTTON_QUNLOCK_HOLD_TIME), applied after lock_down_big
     };
 #pragma pack(pop)
 
-    static_assert (sizeof (Step) == 15 * 2 + 7 * 2 + 4 + 1 + 6 + 5 + 4 + 3 + 128, "Step layout");
+    static_assert (sizeof (Step) == 15 * 2 + 7 * 2 + 4 + 1 + 6 + 5 + 4 + 3 + 128 + 2, "Step layout");
 
     inline bool readStimulus (const char* path, std::vector<Step>& out)
     {
@@ -46,7 +49,7 @@ namespace smrtest
         if (! f) return false;
         char magic[8];
         uint32_t n = 0;
-        bool ok = std::fread (magic, 1, 8, f) == 8 && std::memcmp (magic, "SMRSTIM1", 8) == 0 && std::fread (&n, 4, 1, f) == 1;
+        bool ok = std::fread (magic, 1, 8, f) == 8 && std::memcmp (magic, "SMRSTIM2", 8) == 0 && std::fread (&n, 4, 1, f) == 1;
         if (ok)
         {
             out.resize (n);
@@ -61,7 +64,7 @@ namespace smrtest
         FILE* f = std::fopen (path, "wb");
         if (! f) return false;
         const uint32_t n = (uint32_t) in.size();
-        bool ok = std::fwrite ("SMRSTIM1", 1, 8, f) == 8 && std::fwrite (&n, 4, 1, f) == 1
+        bool ok = std::fwrite ("SMRSTIM2", 1, 8, f) == 8 && std::fwrite (&n, 4, 1, f) == 1
                   && (n == 0 || std::fwrite (in.data(), sizeof (Step), n, f) == n);
         std::fclose (f);
         return ok;
@@ -127,6 +130,9 @@ namespace smrtest
         const float* shift;
         const float* level;
         const uint8_t* lock;
+        const uint8_t* lockPressed;   // lock_pressed[6]
+        const uint8_t* qLocked;       // q_locked[6]
+        const uint32_t* lockDown;     // lock_down[6]
         int motionRotate, motionNotejump, spread;
         uint32_t filterType, filterMode, envTrackMode;
         float levelLpf, fMorph;
@@ -160,6 +166,9 @@ namespace smrtest
         arrf ("freq_shift", v.shift, 6);
         arrf ("channel_level", v.level, 6);
         arru8 ("lock", v.lock, 6);
+        arru8 ("lock_pressed", v.lockPressed, 6);
+        arru8 ("q_locked", v.qLocked, 6);
+        arru ("lock_down", v.lockDown, 6);
         t.i ("motion_rotate", v.motionRotate);
         t.i ("motion_notejump", v.motionNotejump);
         t.i ("spread", v.spread);

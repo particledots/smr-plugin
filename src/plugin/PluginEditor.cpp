@@ -15,6 +15,7 @@ public:
         using APVTS = juce::AudioProcessorValueTreeState;
         static const char* const levelIds[6] = { "level1", "level2", "level3", "level4", "level5", "level6" };
         static const char* const lockIds[6]  = { "lock1", "lock2", "lock3", "lock4", "lock5", "lock6" };
+        static const char* const lockHoldIds[6] = { "lockhold1", "lockhold2", "lockhold3", "lockhold4", "lockhold5", "lockhold6" };
         static const int stripX[6] = { 231, 342, 454, 566, 678, 790 };
 
         // Six channels: level slider and Lock button.
@@ -29,10 +30,11 @@ public:
             place (s, stripX[i], 265, 40, 224);
             addAndMakeVisible (s);
 
-            locks[i].setButtonText ({});
-            buttonAtt.push_back (std::make_unique<APVTS::ButtonAttachment> (apvts, lockIds[i], locks[i]));
-            place (locks[i], stripX[i], 91, 33, 33);
-            addAndMakeVisible (locks[i]);
+            locks[i] = std::make_unique<smrui::LockButton> (*apvts.getParameter (lockHoldIds[i]));
+            locks[i]->setButtonText ({});
+            buttonAtt.push_back (std::make_unique<APVTS::ButtonAttachment> (apvts, lockIds[i], *locks[i]));   // displays the Lock parameter
+            place (*locks[i], stripX[i], 91, 33, 33);
+            addAndMakeVisible (*locks[i]);
         }
 
         // Freq nudge and Freq knobs, odds on the left and evens on the right.
@@ -114,6 +116,21 @@ public:
 
         flashAccMs += (double) dtMs;
         while (flashAccMs >= kRingFlashMs) { flashAccMs -= kRingFlashMs; flash = ! flash; }
+
+        // Lock buttons (leds.c update_lock_leds, play branch): one update every QLOCK_FLASH_SPEED + 1 loop passes; a Q-locked channel
+        // is drawn inverted once in 16 updates. The rate rests on the M2-c placeholder.
+        lockAccMs += (double) dtMs;
+        while (lockAccMs >= kLockLedUpdateMs) { lockAccMs -= kLockLedUpdateMs; lockFlash1 = (lockFlash1 + 1) % 16; }
+        for (int c = 0; c < 6; ++c)
+        {
+            const bool q = d.valid != 0 && d.qlocked[c] != 0 && lockFlash1 == 0;
+            if (locks[c]->qFlicker != q || locks[c]->flashPhase != flash)
+            {
+                locks[c]->qFlicker = q;
+                locks[c]->flashPhase = flash;
+                locks[c]->repaint();
+            }
+        }
 
         uint16_t newRing[kRingLeds][3] = {};
         uint16_t newEnv[6][3] = {};
@@ -344,6 +361,8 @@ private:
     bool inClipOn = false;
     bool flash = false;
     double flashAccMs = 0.0;
+    double lockAccMs = 0.0;
+    int lockFlash1 = 0;
     Meter meters[4];
 
     // Trigger k: 0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down. The processor outlives the editor.
@@ -409,7 +428,7 @@ private:
     uint32_t sent[4] = {};
 
     juce::Slider levels[6], nudge[2], freq[2], qKnob, morph, spread;
-    juce::ToggleButton locks[6];
+    std::unique_ptr<smrui::LockButton> locks[6];
     juce::ComboBox filterMode, filterType, bank;
     std::unique_ptr<smrui::SlideSwitch> oddsSwitch, evensSwitch, slewSwitch, scaleRotSwitch, prePostSwitch, envSwitch;
     std::unique_ptr<smrui::PulseButton> rotCcw, rotCw, scaleDown, scaleUp;

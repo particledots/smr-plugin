@@ -218,3 +218,11 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - Build 40625336120 (attempt 2; the first download was blocked by a virus warning and a re-run fixed it): ring "looks better", all good (Bryn's words).
 - Idle ping on the filters (about one every 30 to 45 s with no audio) seen once in an older project, not seen in a new project. Not reproduced, cause unknown. Offline check: 5 minutes of silence through the core (default settings and sliders up with high Q) gave output exactly 0 (local g++ build of tools/smr_render, not a CI result). If it comes back, test the input path first.
 - 6b accepted on the Intel Mac. Not tested on the M4 mac mini. The "triggers sent/seen" line stays.
+
+## Milestone 7, step 1: Lock buttons (started 2026-10-27, NOT built by CI yet, NOT tested by Bryn)
+
+- Scope decisions (Bryn): in = Q lock, Lock jacks (2 trigger params), transposition and fine tune, forbidden notes, 1V/oct (lights only, a fourth Env speed position); out = System Mode, settings slots, colour schemes, user-scale editing. AU stays `aufx`. Lock hold time follows the firmware count (M7-a).
+- Code: `src/core/Engine.cpp process_lock_buttons` (port of `params.c`, PLAY branch), `Constants.h kLockButtonQunlockHoldTime`; six new host parameters `lockhold1..6` (47 in total, appended at the end); `ParamApplier::apply` sets the Lock pins every block and `coreLockChanges` reports core-made lock changes; `SmrAudioProcessor::syncLockParameters` (30 Hz timer, message thread) copies them into the Lock parameters; `SmrUi.h LockButton` (tap, shift-click hold, Q-lock flicker, sticky flash).
+- V1 (oracle) extended with the Lock button pins (stimulus magic SMRSTIM2, Step 197 bytes). New finding P-10 (out-of-range table read in the firmware when BpRe is selected with a channel on bank 19); the stimulus avoids that switch.
+- Local pre-checks only (not CI): `smr_core_tests` 73 checks, `smr_param_tests` 98 checks, no failures; V1 8 of 8 scenarios identical; fixed-render hash unchanged (fee74c946b3031c0). The JUCE code (LockButton, sync timer, `testLockHoldSync`) has not been compiled yet: JUCE is built by CI only.
+- Test sheet: docs/testing-milestone-7a.md.

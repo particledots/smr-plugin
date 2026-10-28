@@ -230,6 +230,13 @@ Full reasoning is in `docs/architecture.md` sections 11 to 14.
   text (M2-d) lists the TIM10 tick first; the code does the loop pass first. Whether that order matters has not been checked.
 - **P-9 Switching filter type or mode is covered by V1 for only 588 blocks** (scenario 4), because that scenario
   saturates the output afterwards. Not a known mismatch; a shorter comparison.
+- **P-10 Switching into one-pass BpRe with a channel on bank 19 reads past a table (found in Milestone 7).**
+  `filter.c` has no bank 19 branch in the BpRe selection (see M1-o), so `c_hiq[]`/`c_loq[]` keep the pointers of the
+  previous selection. When that was MAXQ with the user bank, the MAXQ table (231 floats) is then read with the BpRe
+  layout (693 floats), past its end. Oracle and port read different memory there (first difference: V1 scenario 4,
+  step 3178, `filtered_buffer[0]`). Not a port bug; undefined behaviour in the firmware, reachable only from System Mode
+  (out of scope). The V1 stimulus (`tests/oracle/gen_stimulus.cpp`) no longer makes that switch with a channel on bank 19.
+  Pre-check only: V1 passes locally in 8 of 8 scenarios; CI has not confirmed.
 
 ## Milestone 4 (parameter layer and audio wiring)
 
@@ -347,3 +354,16 @@ In: "odds" is input slot 1, which feeds channels 1, 3, 5 (`Engine.h processBlock
 **M6-h addendum 2 (2026-10-27, Bryn, Intel Mac):** the light ring colours are hard to see on the white panel. Changed in `PluginEditor.cpp`: the brightest firmware component (770) now draws as full colour (was 1023, so colours reached about 75 %), and ring and Env out dots get a dark 2.5 px outline. Firmware values in `DisplayModel.h` unchanged. Needs Bryn's look.
 
 **M6-h addendum 3 (2026-10-27, Bryn, Intel Mac, run 40622399959):** the dark outline helped a little. With a slider fully down the ring dot is invisible to the eye (faint in a photo); visible just below 20 %. Bryn deferred to Claude on stronger contrast. Changed in `PluginEditor.cpp`: ring gamma 0.5 to 0.35 (the 5 % floor, value 38 of 1023, draws brighter), lit dots radius 11, unlit dots radius 7. Firmware values in `DisplayModel.h` unchanged. Needs Bryn's look.
+
+
+## Milestone 7 (behaviours and v5 features)
+
+- **M7-a Lock hold time: manual versus source.** The manual says to hold a Lock button for 2 seconds to unlock the
+  frequency and keep the Q lock. `params.c` `process_lock_buttons` compares `lock_down` with `LOCK_BUTTON_QUNLOCK_HOLD_TIME`
+  (50000 main-loop passes, `params.h`). The port uses the source count (`kLockButtonQunlockHoldTime`). At the
+  placeholder main-loop rate of 12 kHz (M2-c) that is about 4.2 s, so the real time depends on M2-c. Not resolved.
+- **M7-b Core-to-host Lock sync.** The core can now change `lock[]` itself (button tap, long hold). The host Lock
+  parameters follow it through a message-thread sync; if the host writes a Lock parameter in the same moment, the
+  host value wins on the next block. Documented limitation.
+- **M7-c Start-up Q lock.** `param_read_q` starts its pot filter (`qpot_lpf`) at 0 and settles slowly. A Lock held while the filter is still moving more than `QPOT_MIN_CHANGE` (100 counts) Q-locks the channel by itself. This is firmware behaviour, ported as is (V1 covers it). The test sheet asks for a 10 second wait before the first click.
+- **M7-d Short press.** A Lock press shorter than 5 loop passes never sets `lock_pressed`, but the release branch of `process_lock_buttons` still toggles the lock (`lock_up` is set by any pressed pass). Ported as is.

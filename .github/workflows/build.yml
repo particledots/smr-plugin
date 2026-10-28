@@ -94,7 +94,7 @@ jobs:
         run: |
           python3 - <<'PY'
           d = bytearray(open('stim_0.bin', 'rb').read())
-          off = 12 + 195 * 100 + 67 + 1      # step 100, inL[0], second byte
+          off = 12 + 197 * 100 + 67 + 1      # step 100, inL[0], second byte
           d[off] ^= 0x40
           open('stim_ctl.bin', 'wb').write(d)
           PY

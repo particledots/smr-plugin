@@ -42,6 +42,58 @@ namespace smrui
         g.fillPath (dashed);
     }
 
+    // Milestone 7: a Lock button. A plain click is a tap (the Lock hold parameter is on while the mouse is down; the core's
+    // process_lock_buttons then toggles the lock). A shift-click toggles a sticky hold (the parameter stays on, drawn flashing),
+    // for the gestures that need the button held while something else is turned or pressed. The Lock parameter itself is only
+    // displayed here (it follows the core); this button never writes it.
+    class LockButton : public juce::ToggleButton
+    {
+    public:
+        explicit LockButton (juce::RangedAudioParameter& holdParam)
+            : hold (holdParam, [this] (float v) { held = v >= 0.5f; repaint(); })
+        {
+            hold.sendInitialUpdate();
+        }
+
+        void mouseDown (const juce::MouseEvent& e) override
+        {
+            if (! isEnabled()) return;
+            if (e.mods.isShiftDown())
+            {
+                sticky = ! sticky;
+                hold.setValueAsCompleteGesture (sticky ? 1.0f : 0.0f);
+                tapDown = false;
+            }
+            else if (! sticky)
+            {
+                tapDown = true;
+                hold.setValueAsCompleteGesture (1.0f);
+            }
+            repaint();
+        }
+
+        void mouseUp (const juce::MouseEvent&) override
+        {
+            if (tapDown)
+            {
+                tapDown = false;
+                hold.setValueAsCompleteGesture (0.0f);
+            }
+            repaint();
+        }
+
+        bool isSticky() const noexcept { return sticky; }
+        bool isHeld() const noexcept { return held; }
+
+        // Set by the editor every frame: the Q-lock flicker (leds.c update_lock_leds) and the flash phase for a sticky hold.
+        bool qFlicker = false;
+        bool flashPhase = false;
+
+    private:
+        juce::ParameterAttachment hold;
+        bool held = false, sticky = false, tapDown = false;
+    };
+
     class SmrLookAndFeel : public juce::LookAndFeel_V4
     {
     public:
@@ -107,11 +159,22 @@ namespace smrui
         void drawToggleButton (juce::Graphics& g, juce::ToggleButton& b, bool, bool down) override
         {
             const auto r = b.getLocalBounds().toFloat().reduced (1.5f);
-            const bool on = b.getToggleState();
+            bool on = b.getToggleState();
+            bool stickyFlash = false;
+            if (auto* lb = dynamic_cast<LockButton*> (&b))
+            {
+                if (lb->qFlicker) on = ! on;                       // leds.c update_lock_leds: a Q-locked channel inverts once in 16 updates
+                stickyFlash = lb->isSticky() && lb->flashPhase;    // plugin-only: shows that the button is being held by shift-click
+            }
             g.setColour (on ? juce::Colour (0xffffeeb0) : paper());
             g.fillEllipse (r);
             g.setColour (on ? juce::Colour (0xffb98a00) : edge());
-            g.drawEllipse (r, down ? 2.4f : 1.6f);
+            g.drawEllipse (r, (down || stickyFlash) ? 2.4f : 1.6f);
+            if (stickyFlash)
+            {
+                g.setColour (ink());
+                g.drawEllipse (r.reduced (4.0f), 1.6f);
+            }
         }
     };
 

@@ -66,6 +66,10 @@ namespace smr_plugin
             B ("lock5", "Lock 5", Lock, 4, 0.0f), B ("lock6", "Lock 6", Lock, 5, 0.0f),
             C ("filtermode", "Filter Mode", FilterMode, kFilterMode, 0.0f),
             C ("filtertype", "Filter Type", FilterType, kFilterType, 0.0f),
+            // Milestone 7 (appended at the end so the order of the earlier parameters did not change)
+            B ("lockhold1", "Lock 1 Hold", LockHold, 0, 0.0f), B ("lockhold2", "Lock 2 Hold", LockHold, 1, 0.0f),
+            B ("lockhold3", "Lock 3 Hold", LockHold, 2, 0.0f), B ("lockhold4", "Lock 4 Hold", LockHold, 3, 0.0f),
+            B ("lockhold5", "Lock 5 Hold", LockHold, 4, 0.0f), B ("lockhold6", "Lock 6 Hold", LockHold, 5, 0.0f),
         };
 #undef F
 #undef B
@@ -208,6 +212,20 @@ namespace smr_plugin
         return c;
     }
 
+    uint32_t ParamApplier::coreLockChanges (const smr::Engine& e, const float* v, uint32_t* coreValues)
+    {
+        uint32_t mask = 0, vals = 0;
+        for (int i = 0; i < kNumParams; ++i)
+        {
+            if (kSpecs[i].role != Role::Lock) continue;
+            const int ch = kSpecs[i].channel;
+            const bool core = e.lock[ch] != 0;
+            if (core != isOn (v, i)) { mask |= 1u << ch; if (core) vals |= 1u << ch; }
+        }
+        if (coreValues != nullptr) *coreValues = vals;
+        return mask;
+    }
+
     void ParamApplier::apply (smr::Engine& e, const float* v, bool initial)
     {
         e.setControls (buildControls (v));
@@ -219,6 +237,10 @@ namespace smr_plugin
 
             switch (s.role)
             {
+                case Role::LockHold:   // a pin level, read by process_lock_buttons() in every loop pass
+                    e.setLockButton (s.channel, isOn (v, i));
+                    break;
+
                 case Role::Lock:
                     if (changed) e.setLockLatched (s.channel, isOn (v, i));
                     break;

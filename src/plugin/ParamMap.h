@@ -22,7 +22,8 @@ namespace smr_plugin
         NudgeOdds, NudgeEvens, FreqOdds, FreqEvens,
         OddsMode, EvensMode, PrePost, EnvSpeed, Slew, ScaleRotation,
         RotateCw, RotateCcw, ScaleUp, ScaleDown,
-        Bank, Lock, FilterMode, FilterType
+        Bank, Lock, FilterMode, FilterType,
+        LockHold   // Milestone 7: the Lock button pin of one channel (params.c process_lock_buttons)
     };
 
     struct ParamSpec
@@ -38,7 +39,7 @@ namespace smr_plugin
         const char* const* choices;
     };
 
-    constexpr int kNumParams = 41;
+    constexpr int kNumParams = 47;
 
     const ParamSpec& spec (int index);
     int indexOfId (const char* id);                 // -1 if unknown
@@ -71,6 +72,11 @@ namespace smr_plugin
         // values, bank and triggers are only remembered (the snapshot, not the Bank parameter, holds each
         // channel's bank), and nothing fires.
         void apply (smr::Engine& engine, const float* values, bool initial = false);
+
+        // Milestone 7: the core can change lock[] itself (params.c process_lock_buttons, process_lock_jacks). Bit i of the result is set
+        // when channel i's lock[] differs from its Lock parameter value, i.e. the change came from the core, not from the host.
+        // Call after the core blocks of a host block. Bit i of *coreValues is the core's lock[i] (set for the mismatching channels).
+        static uint32_t coreLockChanges (const smr::Engine& engine, const float* values, uint32_t* coreValues);
 
         // How many rising edges each trigger has had since this object was made (0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down).
         // A diagnostic for the window (docs/open-questions.md M6-c); it does not affect the audio.

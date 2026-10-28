@@ -738,6 +738,34 @@ namespace
         proc->releaseResources();
     }
 
+    // Milestone 7: a tap on a Lock hold parameter makes the core toggle lock[], and syncLockParameters() copies that into the Lock parameter.
+    void testLockHoldSync()
+    {
+        auto proc = std::make_unique<SmrAudioProcessor>();
+        proc->setRateAndBufferSizeDetails (48000.0, 512);
+        proc->prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buf (2, 512);
+        juce::MidiBuffer midi;
+        auto blocks = [&] (int n) { for (int b = 0; b < n; ++b) { buf.clear(); proc->processBlock (buf, midi); } };
+        auto& apvts = proc->parameters();
+        auto raw = [&] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
+
+        blocks (300);   // let the Q pot LPF settle (a Lock held while it moves would Q-lock, params.c param_read_q)
+        apvts.getParameter ("lockhold2")->setValueNotifyingHost (1.0f);
+        blocks (40);
+        proc->syncLockParameters();
+        check (raw ("lock2") < 0.5f, "lock hold: while the button is held, nothing has toggled yet (the Lock 2 parameter is still off)");
+        apvts.getParameter ("lockhold2")->setValueNotifyingHost (0.0f);
+        blocks (40);
+        proc->syncLockParameters();
+        check (raw ("lock2") >= 0.5f && raw ("lock1") < 0.5f, "lock hold: after a tap the core's lock[1] is copied into the Lock 2 parameter, and only that one",
+               fmt ("lock2 %.2f lock1 %.2f", (double) raw ("lock2"), (double) raw ("lock1")));
+        blocks (10);
+        proc->syncLockParameters();
+        check (raw ("lock2") >= 0.5f, "lock hold: the Lock 2 parameter stays on after the sync (the core does not undo it)");
+        proc->releaseResources();
+    }
+
     int selftest()
     {
         testLayouts();
@@ -752,6 +780,7 @@ namespace
         testEditor();
         testTriggerCounters();
         testDisplay();
+        testLockHoldSync();
         std::printf ("%s: %d checks, %d failed\n", failures ? "FAIL" : "PASS", checks, failures);
         return failures ? 1 : 0;
     }

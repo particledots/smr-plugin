@@ -71,6 +71,11 @@ namespace smr
     constexpr uint32_t PRE  = 0;
     constexpr uint32_t POST = 1;
 
+    // params.h LOCK_BUTTON_QUNLOCK_HOLD_TIME: main-loop passes (not seconds) a Lock button must be held, with the channel locked and
+    // Q-locked and the Q pot not turned, before the frequency lock is cleared and the Q-lock kept (params.c process_lock_buttons).
+    // The manual says 2 seconds; the loop has no timer, so the real time depends on the main-loop rate (M2-c placeholder): docs/open-questions.md M7-a.
+    constexpr uint32_t kLockButtonQunlockHoldTime = 50000;
+
     // params.h
     enum EnvOutMode : int { ENV_SLOW = 0, ENV_FAST = 1, ENV_TRIG = 2, ENV_VOLTOCT = 3 };
 }

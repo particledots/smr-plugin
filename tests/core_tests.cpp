@@ -197,6 +197,61 @@ namespace
     }
 
     // ---------------------------------------------------------------------------------------------------------
+    // Milestone 7: params.c process_lock_buttons (PLAY branch)
+    void testLockButtons()
+    {
+        auto fresh = [] {
+            std::unique_ptr<smr::Engine> e (new smr::Engine());
+            e->setControls (defaultControls());
+            e->reset();
+            return e;
+        };
+        auto passes = [] (smr::Engine& e, int n) { for (int k = 0; k < n; ++k) e.runLoopPass(); };
+
+        {   // tap: pressed 5+ passes, released 6+ passes -> lock toggles on, then off again (off also clears q_locked)
+            auto e = fresh();
+            e->setLockButton (0, true);  passes (*e, 10);
+            check (e->lock_pressed[0] == 1, "M7 lock button: pressed after 5 passes (lock_down reaches 5)");
+            e->setLockButton (0, false); passes (*e, 10);
+            check (e->lock_pressed[0] == 0 && e->lock[0] == 1 && e->lock_down[0] == 1, "M7 lock button: a tap toggles the lock on; lock_down is 1 while released");
+            e->q_locked[0] = 1;
+            e->setLockButton (0, true);  passes (*e, 10);
+            e->setLockButton (0, false); passes (*e, 10);
+            check (e->lock[0] == 0 && e->q_locked[0] == 0, "M7 lock button: a second tap unlocks and clears q_locked");
+        }
+        {   // a press shorter than 5 passes never becomes lock_pressed, but the release branch still toggles (it only tests
+            // user_turned_Q_pot and already_handled_lock_release; lock_up is set by any pressed pass)
+            auto e = fresh();
+            e->setLockButton (2, true);  passes (*e, 3);
+            check (e->lock_pressed[2] == 0, "M7 lock button: after 3 passes lock_pressed is still 0");
+            e->setLockButton (2, false); passes (*e, 10);
+            check (e->lock[2] == 1 && e->lock_pressed[2] == 0, "M7 lock button: a press under 5 passes still toggles the lock on release (params.c release branch)");
+        }
+        {   // hold + turn Q: q_locked set, release does not toggle the lock
+            auto e = fresh();
+            e->setLockButton (1, true);  passes (*e, 10);
+            smr::Controls c = defaultControls();
+            c.pot[0] = 3000;
+            e->setControls (c);
+            int32_t l[16] = {}, r[16] = {}, oa[16], ob[16];
+            for (int b = 0; b < 400 && ! e->q_locked[1]; ++b) { e->processBlock (l, r, oa, ob); passes (*e, 4); }
+            check (e->q_locked[1] == 1 && e->user_turned_Q_pot == 1, "M7 Q lock: turning Q while a Lock is held sets q_locked and user_turned_Q_pot");
+            e->setLockButton (1, false); passes (*e, 10);
+            check (e->lock[1] == 0 && e->q_locked[1] == 1, "M7 Q lock: releasing after a Q turn does not toggle the lock");
+        }
+        {   // long hold on a locked, Q-locked channel: unlocks the frequency, keeps the Q lock, and the release is swallowed
+            auto e = fresh();
+            e->lock[3] = 1; e->q_locked[3] = 1;
+            e->setLockButton (3, true);  passes (*e, 10);
+            e->lock_down[3] = smr::kLockButtonQunlockHoldTime;
+            passes (*e, 2);
+            check (e->lock[3] == 0 && e->q_locked[3] == 1 && e->lock_down[3] == 0, "M7 hold: past 50000 passes the frequency unlocks, the Q lock stays, lock_down resets");
+            e->setLockButton (3, false); passes (*e, 10);
+            check (e->lock[3] == 0 && e->q_locked[3] == 1, "M7 hold: the release after an unlock does not toggle the lock again");
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
     // V2: invariants
     void run (smr::Engine& e, Signal sig, uint64_t blocks, bool jitter, bool& finite, uint64_t& maxGuard)
     {
@@ -546,6 +601,7 @@ int main (int argc, char** argv)
     testScheduler();
     testResetAndControls();
     testLoopGuard();
+    testLockButtons();
     testDefaultResonators();
     testAdapter();
     testResamplerRoundTrip();

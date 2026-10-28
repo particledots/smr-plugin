@@ -98,9 +98,10 @@ namespace smr
         update_motion();
     }
 
-    // main.c, the while(1) body, in the firmware's order. Not ported (Milestone 7, UI and hardware only):
-    // check_errors, update_LED_ring, update_lock_leds, process_lock_buttons, process_freq_blocks,
-    // process_rotary_button, process_rotary_rotation, check_rotary_pressed_repeatedly and the edit modes.
+    // main.c, the while(1) body, in the firmware's order. Not ported (UI and hardware only):
+    // check_errors, update_LED_ring, update_lock_leds, process_freq_blocks, process_rotary_button,
+    // process_rotary_rotation, check_rotary_pressed_repeatedly and the edit modes.
+    // process_lock_buttons is ported for ui_mode PLAY only (Milestone 7).
     void Engine::runLoopPass()
     {
         int32_t t_spread;
@@ -111,6 +112,8 @@ namespace smr
         if (t_spread != -1) update_spread ((int8_t) t_spread);
 
         process_lock_jacks();
+
+        process_lock_buttons();
 
         if (do_ROTUP)
         {
@@ -253,6 +256,67 @@ namespace smr
                 lock[1] = (uint8_t) (1 - lock[1]);
 
                 lock[3] = (uint8_t) (1 - lock[3]);
+            }
+        }
+    }
+
+    // params.c process_lock_buttons, ui_mode PLAY only (ui_mode is always PLAY in this port; the SELECT_PARAMS, EDIT_COLORS and
+    // EDIT_SCALES branches belong to System Mode, which is not ported). LOCKLED_ON/OFF are omitted (the window reads lock[] and q_locked[]).
+    // One call is one main-loop pass: the counts below are passes, not time.
+    void Engine::process_lock_buttons()
+    {
+        uint8_t i;
+        for (i = 0; i < 6; i++)
+        {
+            if (lock_button[i])
+            {
+                lock_up[i] = 1;
+                if (lock_down[i] != 0
+                    && lock_down[i] != 0xFFFFFFFF)   //don't wrap our counter!
+                    lock_down[i]++;
+
+                if (lock_down[i] == 5)   //first time we notice lock button is solidly down...
+                {
+                    lock_pressed[i] = 1;
+                    user_turned_Q_pot = 0;
+                    already_handled_lock_release[i] = 0;
+                }
+
+                //check to see if it's been held down for a while, and the user hasn't turned the Q pot
+                //if so, then we should unlock immediately, but not unlock the q_lock
+                if (lock_down[i] > kLockButtonQunlockHoldTime && lock[i] && ! user_turned_Q_pot && q_locked[i])
+                {
+                    lock[i] = 0;
+                    already_handled_lock_release[i] = 1;   //set this flag so that we don't do anything when the button is released
+                    lock_down[i] = 0;                      //stop checking this button until it's released
+                }
+            }
+            else
+            {
+                if (lock_up[i] != 0) lock_up[i]++;
+                if (lock_up[i] > 5)
+                {
+                    lock_up[i] = 0;
+                    //Handle button release
+
+                    lock_pressed[i] = 0;
+
+                    if (! user_turned_Q_pot && ! already_handled_lock_release[i])   //only change lock state if user did not do a q_lock
+                    {
+                        if (lock[i] == 0)
+                        {
+                            lock[i] = 1;
+                            motion_spread_dir[i] = 0;
+                        }
+                        else
+                        {
+                            lock[i] = 0;
+                            q_locked[i] = 0;
+                        }
+                    }
+                }
+
+                lock_down[i] = 1;
             }
         }
     }

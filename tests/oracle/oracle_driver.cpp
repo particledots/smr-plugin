@@ -19,6 +19,7 @@ extern "C"
     int8_t read_spread (void);
     void update_spread (int8_t t_spread);
     void process_lock_jacks (void);
+    void process_lock_buttons (void);
     void process_rotateCV (void);
     void process_scaleCV (void);
     void rotate_up (void);
@@ -29,6 +30,7 @@ extern "C"
     // shim_globals.c
     void oracle_set_audio (const int32_t* l, const int32_t* r);
     void oracle_set_pins (uint32_t idrB, uint32_t idrD, uint32_t idrE);
+    void oracle_set_lock_buttons (uint32_t mask);
 
     // firmware variables
     extern volatile uint16_t adc_buffer[16];
@@ -91,6 +93,8 @@ static void loopPass()
 
     process_lock_jacks();
 
+    process_lock_buttons();
+
     if (do_ROTUP)
     {
         do_ROTUP = 0;
@@ -151,6 +155,9 @@ static void emitState (Trace& t)
     v.shift = freq_shift;
     v.level = channel_level;
     v.lock = lock;
+    v.lockPressed = lock_pressed;
+    v.qLocked = q_locked;
+    v.lockDown = lock_down;
     v.motionRotate = motion_rotate;
     v.motionNotejump = motion_notejump;
     v.spread = spread;
@@ -186,8 +193,11 @@ static int runTrace (const char* stimPath, const char* outPath)
             lock_pressed[k] = (s.lock_pressed_mask >> k) & 1;
             lock_down[k] = s.lock_down_big ? 40000u : 0u;
         }
+        if (s.lock_down_near)
+            for (int k = 0; k < 6; ++k) lock_down[k] = 49990u;
         freqblock = s.freqblock;
 
+        oracle_set_lock_buttons (s.lock_button_mask);
         setInputs (s);
         if (s.events & 1) do_ROTUP = 1;
         if (s.events & 2) do_ROTDOWN = 1;

@@ -49,6 +49,26 @@ SmrAudioProcessor::SmrAudioProcessor()
 {
     for (int i = 0; i < smr_plugin::kNumParams; ++i)
         raw[i] = apvts.getRawParameterValue (smr_plugin::spec (i).id);
+    startTimerHz (30);
+}
+
+void SmrAudioProcessor::syncLockParameters()
+{
+    const uint32_t mask = lockSyncMask.exchange (0);
+    if (mask == 0) return;
+    const uint32_t vals = lockSyncValues.load();
+    for (int i = 0; i < smr_plugin::kNumParams; ++i)
+    {
+        const smr_plugin::ParamSpec& s = smr_plugin::spec (i);
+        if (s.role != smr_plugin::Role::Lock || ((mask >> s.channel) & 1u) == 0) continue;
+        const float want = ((vals >> s.channel) & 1u) ? 1.0f : 0.0f;
+        if (auto* p = apvts.getParameter (s.id))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (want);
+            p->endChangeGesture();
+        }
+    }
 }
 
 void SmrAudioProcessor::readValues (float* values) const noexcept
@@ -209,6 +229,18 @@ void SmrAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
 
     for (int ch = 2; ch < nOut; ++ch)
         buffer.clear (ch, 0, n);
+
+    // Milestone 7: tell the message thread about lock[] changes that came from the core.
+    {
+        uint32_t vals = 0;
+        const uint32_t mask = smr_plugin::ParamApplier::coreLockChanges (engine, values, &vals);
+        if (mask != 0)
+        {
+            lockSyncValues.fetch_and (~mask);
+            lockSyncValues.fetch_or (vals);
+            lockSyncMask.fetch_or (mask);
+        }
+    }
 
     // Window only: a read-only copy of core state, clip events and peaks. No locks, no allocation, no writes to the core.
     {
