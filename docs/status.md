@@ -262,3 +262,10 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - Step 3a (now): listening test on the existing build, sheet docs/testing-milestone-7c.md. No new CI run.
 - Step 3b (after the result): the Env Out light display for fine tune and transposition and the Lock button flash while a clear is staged (display state omitted from the core in P-8).
 - The temporary "triggers sent/seen" line stays until Bryn says the M4 mac mini 6a test is done.
+
+### Milestone 7 step 3a test (Bryn, **Intel Mac**, build run 40641849028, 2026-10-28; the M4 mac mini has not tested this)
+- Matched as described in docs/testing-milestone-7c.md: 2.4 and 2.5 (pitch stays at +3 after release, Lock 1 not lit; stays +3 with Nudge at 0%), section 3 (no change when wiggling outside the saved zone; follows again at the saved zone, about 73%), section 4 (odds 1, 3, 5 and evens 2, 4, 6 move together, the other side not), section 5 (locked channel 5 transposes and stays lit), section 6 (Bryn: "all worked"; his message did not give the answer to 6.2, whether a 2 second hold cleared the transpositions and whether any Lock lit).
+- 2.3: 12 steps heard going down from the top. 2.2 and 2.3 together: the tuner note swept one octave, F# at 0% to the next F# at 100%, which fits -6 to +6 semitones (the tuner shows note names, not 600 cents).
+- **Mismatch 1 (open):** 2.2 going up from 0%, the first step came at about "9 o'clock" and Bryn counted 9 or 10 steps (hard to tell). The sheet expects the first step in the middle (46 to 54%) and 6 steps. One possible cause is a transposition left on channel 1 from earlier use of the same plugin instance (the zone to cross is `saved_coarse_adj`), not yet checked.
+- **Mismatch 2 (open):** 1.2 fine tune by ear: C# at 0%, D at 50%, D# at 100%, "about a semitone more on each click". Expected from the source: about +63 cents at 50% and +124 cents at 100%. Not measured in cents yet.
+- Follow-up test sheet sent in chat (2026-10-28): fine tune in cents at 0, 25, 50, 75, 100%; and 2.2 again on a fresh plugin instance.
