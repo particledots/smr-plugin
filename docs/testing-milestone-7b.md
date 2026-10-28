@@ -1,7 +1,7 @@
 # Milestone 7, step 2 test: Lock jack triggers ("Lock odds", "Lock evens")
 
 Test on the Intel Mac first (macOS 12.7.8, Logic 10.7.8). Tell me when you also test on the M4 mac mini. Play noise or music through the plugin the whole time.
-Install the newest build as in docs/testing-milestone-6a.md section 1. Write down the run number.
+Install build run 40641849028 (commit 7ad84ab) as in docs/testing-milestone-6a.md section 1.
 After you open the plugin window, wait 10 seconds with audio playing before the first click.
 
 What is new: under each Freq knob there is a button, "Lock odds" on the left and "Lock evens" on the right. It is the SMR's Lock jack: one click is one trigger. The line under the title now also shows "Lock 135" and "Lock 246" (sent/seen).
@@ -44,6 +44,6 @@ Start with the switches at 1·3·5 and 2·4·6 (both to the "all channels" side)
 1. In the parameter list for the plugin, tell me whether "Lock 1 3 5 (trigger)" and "Lock 2 4 6 (trigger)" are there.
 
 ## 9. Tell me
-1. Which Mac, the run number.
+1. Which Mac.
 2. Anything that did not match, with the step number.
 3. The numbers from step 6.1.
