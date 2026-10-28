@@ -341,3 +341,5 @@ Index 0 at the top is from `led_ring.c display_scale` (top half is positions 15 
 
 ### M6-j Meter labels (new)
 In: "odds" is input slot 1, which feeds channels 1, 3, 5 (`Engine.h processBlock`), by the source; not measured. Out: labelled L and R (host left and right) because the output mapping is still open (M1-m, M3-a); the sketch's "odds, evens" is not used.
+
+**M6-h addendum (2026-10-27, Bryn):** on the real SMR a channel with its slider fully down has its ring LED dimmed, not out. The firmware value is the 5 % floor (`led_ring.c display_filter_rotation`, `t_f = max(level, 0.05)`), e.g. {0,38,0} for channel 3. The window drew it almost the same as the dark lens. Changed in `PluginEditor.cpp ledColour`: the ring uses gamma 0.5 on the 0..1023 value (plugin display choice, not firmware); Env out lights stay linear. The numbers in `DisplayModel.h` are unchanged. Needs Bryn's look after the next CI build.

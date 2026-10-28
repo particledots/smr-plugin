@@ -252,7 +252,7 @@ public:
         {
             const float a = (float) i * juce::MathConstants<float>::twoPi / (float) smr_plugin::kRingLeds;
             const float x = kRingCx + kRingRx * std::sin (a), y = kRingCy - kRingRy * std::cos (a);
-            g.setColour (ledColour (ringLed[i]));
+            g.setColour (ledColour (ringLed[i], 0.5f));
             g.fillEllipse (x - 9.0f, y - 9.0f, 18.0f, 18.0f);
             g.setColour (smrui::edge());
             g.drawEllipse (x - 9.0f, y - 9.0f, 18.0f, 18.0f, 1.0f);
@@ -319,10 +319,12 @@ private:
     static int meterPixels (float db) { return juce::roundToInt (juce::jlimit (0.0f, 1.0f, (db + 60.0f) / 60.0f) * (float) kMeterH); }
 
     // A lens that is dark at 0 and shows the full colour at 1023 (the firmware's clamp; the driver is 12 bit, docs/m6b-led-notes.md).
-    static juce::Colour ledColour (const uint16_t* rgb)
+    // gamma 1.0 is linear (Env out lights). The ring uses 0.5 so the firmware's 5 % floor (value 38 of 1023) shows as a dim dot
+    // rather than vanishing into the lens (Bryn, 2026-10-27: on the real SMR a channel at the bottom is dimmed, not out).
+    static juce::Colour ledColour (const uint16_t* rgb, float gamma = 1.0f)
     {
         constexpr float base = 0.17f;
-        auto ch = [] (uint16_t v) { return juce::jmin (1.0f, base + ((float) v / 1023.0f) * (1.0f - base)); };
+        auto ch = [gamma] (uint16_t v) { return juce::jmin (1.0f, base + std::pow ((float) v / 1023.0f, gamma) * (1.0f - base)); };
         return juce::Colour::fromFloatRGBA (ch (rgb[0]), ch (rgb[1]), ch (rgb[2]), 1.0f);
     }
 
