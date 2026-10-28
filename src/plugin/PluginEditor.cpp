@@ -254,8 +254,8 @@ public:
             const float x = kRingCx + kRingRx * std::sin (a), y = kRingCy - kRingRy * std::cos (a);
             g.setColour (ledColour (ringLed[i], 0.5f));
             g.fillEllipse (x - 9.0f, y - 9.0f, 18.0f, 18.0f);
-            g.setColour (smrui::edge());
-            g.drawEllipse (x - 9.0f, y - 9.0f, 18.0f, 18.0f, 1.0f);
+            g.setColour (juce::Colour (0xff1c1c1c));
+            g.drawEllipse (x - 9.0f, y - 9.0f, 18.0f, 18.0f, 2.5f);
         }
 
         g.setColour (smrui::softInk());
@@ -265,8 +265,8 @@ public:
         {
             g.setColour (ledColour (envLed[c]));
             g.fillEllipse ((float) stripX[c] - 11.0f, (float) kEnvY - 11.0f, 22.0f, 22.0f);
-            g.setColour (smrui::edge());
-            g.drawEllipse ((float) stripX[c] - 11.0f, (float) kEnvY - 11.0f, 22.0f, 22.0f, 1.0f);
+            g.setColour (juce::Colour (0xff1c1c1c));
+            g.drawEllipse ((float) stripX[c] - 11.0f, (float) kEnvY - 11.0f, 22.0f, 22.0f, 2.5f);
         }
 
         // Input clip LED (one LED between the IN jacks, panel photo). Colour from the photo; the firmware only switches a pin.
@@ -321,10 +321,13 @@ private:
     // A lens that is dark at 0 and shows the full colour at 1023 (the firmware's clamp; the driver is 12 bit, docs/m6b-led-notes.md).
     // gamma 1.0 is linear (Env out lights). The ring uses 0.5 so the firmware's 5 % floor (value 38 of 1023) shows as a dim dot
     // rather than vanishing into the lens (Bryn, 2026-10-27: on the real SMR a channel at the bottom is dimmed, not out).
+    // kLedFull: the brightest firmware colour component is 770 (DEFAULT_COLOR_CH[0] ch2), so 770 is drawn as the full colour; sums
+    // above it clamp. Raised contrast on the white panel (Bryn, 2026-10-27). Plugin display choice, not firmware.
+    static constexpr float kLedFull = 770.0f;
     static juce::Colour ledColour (const uint16_t* rgb, float gamma = 1.0f)
     {
         constexpr float base = 0.17f;
-        auto ch = [gamma] (uint16_t v) { return juce::jmin (1.0f, base + std::pow ((float) v / 1023.0f, gamma) * (1.0f - base)); };
+        auto ch = [gamma] (uint16_t v) { return juce::jmin (1.0f, base + std::pow ((float) v / kLedFull, gamma) * (1.0f - base)); };
         return juce::Colour::fromFloatRGBA (ch (rgb[0]), ch (rgb[1]), ch (rgb[2]), 1.0f);
     }
 
