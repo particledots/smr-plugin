@@ -785,7 +785,7 @@ namespace
         proc->syncLockParameters();
         check (raw ("lock1") >= 0.5f && raw ("lock3") >= 0.5f && raw ("lock5") >= 0.5f && raw ("lock2") < 0.5f && raw ("lock4") < 0.5f && raw ("lock6") < 0.5f,
                "lock jack: one Lock 1 3 5 pulse sets the Lock 1, 3 and 5 parameters and leaves 2, 4 and 6 alone",
-               fmt ("%.0f%.0f%.0f%.0f%.0f%.0f", (double) raw ("lock1"), (double) raw ("lock2"), (double) raw ("lock3"), (double) raw ("lock4"), (double) raw ("lock5"), (double) raw ("lock6")));
+               fmt ("lock1-4 %.0f%.0f%.0f%.0f", (double) raw ("lock1"), (double) raw ("lock2"), (double) raw ("lock3"), (double) raw ("lock4")) + fmt (" lock5-6 %.0f%.0f", (double) raw ("lock5"), (double) raw ("lock6")));
         blocks (10);
         proc->syncLockParameters();
         check (raw ("lock1") >= 0.5f && raw ("lock3") >= 0.5f && raw ("lock5") >= 0.5f, "lock jack: the Lock parameters stay on after the sync (the core does not undo them)");
