@@ -29,6 +29,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "BlockAdapter.h"
+#include "display_checks.h"
 #include "ParamMap.h"
 #include "PluginProcessor.h"
 #include "StateCodec.h"
@@ -656,6 +657,78 @@ namespace
                "trigger counters: the window's accessors give the same rising counts and equal falling counts");
     }
 
+    // Milestone 6b: the lights' rules (JUCE-free, tests/display_checks.h) and the audio side's publishing through the real processor.
+    // The audio output itself is covered by the bit-for-bit checks above, which run the same processBlock.
+    void testDisplay()
+    {
+        display_checks::run ([] (bool ok, const std::string& what, const std::string& detail) { check (ok, "display: " + what, detail); });
+
+        auto proc = std::make_unique<SmrAudioProcessor>();
+        proc->setRateAndBufferSizeDetails (48000.0, 512);
+        proc->prepareToPlay (48000.0, 512);
+        auto& hub = proc->displayHub();
+        juce::AudioBuffer<float> buf (2, 512);
+        juce::MidiBuffer midi;
+        auto fill = [&] (float l, float r)
+        {
+            for (int i = 0; i < 512; ++i) { buf.setSample (0, i, l); buf.setSample (1, i, r); }
+            proc->processBlock (buf, midi);
+        };
+
+        fill (0.0f, 0.0f);
+        smr_plugin::DisplayData dd;
+        const bool got = hub.read (dd);
+        check (got && dd.valid == 1, "display: the audio side publishes a valid copy after a block");
+        hub.takeClipBits(); for (int k = 0; k < 4; ++k) hub.takePeak (k);
+
+        fill (0.25f, 0.25f);
+        uint32_t bits = hub.takeClipBits();
+        float p0 = hub.takePeak (0), p1 = hub.takePeak (1);
+        check ((bits & smr_plugin::kInputClipBit) == 0 && p0 == 0.25f && p1 == 0.25f, "display: input at 0.25 does not light the clip LED and the peak is 0.25",
+               fmt ("bits 0x%.0f peaks %.4f %.4f", (double) bits, (double) p0, (double) p1));
+
+        fill (0.9f, 0.0f);
+        bits = hub.takeClipBits(); p0 = hub.takePeak (0); p1 = hub.takePeak (1);
+        check ((bits & smr_plugin::kInputClipBit) != 0 && p0 == 0.9f && p1 == 0.0f, "display: slot 1 at +0.9 lights the clip LED; peaks 0.9 and 0",
+               fmt ("bits 0x%.0f peaks %.4f %.4f", (double) bits, (double) p0, (double) p1));
+
+        fill (0.0f, 0.9f);
+        bits = hub.takeClipBits(); p0 = hub.takePeak (0); p1 = hub.takePeak (1);
+        check ((bits & smr_plugin::kInputClipBit) != 0 && p0 == 0.0f && p1 == 0.9f, "display: slot 2 at +0.9 lights the clip LED too",
+               fmt ("bits 0x%.0f peaks %.4f %.4f", (double) bits, (double) p0, (double) p1));
+
+        fill (-0.9f, -0.9f);
+        bits = hub.takeClipBits(); p0 = hub.takePeak (0);
+        check ((bits & smr_plugin::kInputClipBit) == 0 && p0 == 0.9f, "display: negative samples do not light the clip LED (audio_util.c has no absolute value) but count in the meter",
+               fmt ("bits 0x%.0f peak %.4f", (double) bits, (double) p0));
+
+        // Noise in for a while: the output meters see something and the copy of core state is consistent.
+        uint32_t seed = 12345;
+        float outPeak = 0.0f;
+        for (int blk = 0; blk < 60; ++blk)
+        {
+            for (int i = 0; i < 512; ++i)
+            {
+                seed = seed * 1664525u + 1013904223u;
+                const float v = 0.5f * ((float) (seed >> 8) / 8388608.0f - 1.0f);
+                buf.setSample (0, i, v); buf.setSample (1, i, v);
+            }
+            proc->processBlock (buf, midi);
+            outPeak = std::max ({ outPeak, hub.takePeak (2), hub.takePeak (3) });
+        }
+        check (outPeak > 0.0f, "display: the output meters see the plugin output after noise at the input", fmt ("peak %.5f", (double) outPeak));
+        const bool got2 = hub.read (dd);
+        bool sane = got2 && dd.valid == 1;
+        for (int c = 0; c < 6; ++c) sane = sane && dd.note[c] >= 0 && dd.note[c] < 20 && dd.fadeto[c] >= 0 && dd.fadeto[c] < 20 && dd.level[c] >= 0.0f && dd.envPwm[c] <= 4095;
+        check (sane, "display: the copy has notes 0 to 19, level >= 0 and ENVOUT_PWM <= 4095");
+
+        // A host rate the plugin does not support runs nothing: the copy is marked not valid.
+        proc->prepareToPlay (44101.0, 512);
+        const bool got3 = hub.read (dd);
+        check (got3 && dd.valid == 0, "display: an unsupported host rate publishes a not-valid copy (the lights go dark)");
+        proc->releaseResources();
+    }
+
     int selftest()
     {
         testLayouts();
@@ -669,6 +742,7 @@ namespace
         testDenormals();
         testEditor();
         testTriggerCounters();
+        testDisplay();
         std::printf ("%s: %d checks, %d failed\n", failures ? "FAIL" : "PASS", checks, failures);
         return failures ? 1 : 0;
     }

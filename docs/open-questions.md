@@ -317,3 +317,26 @@ Drawn on a fixed 1000 x 824 canvas and scaled to the window. Opens at 900 x 742.
 
 ### Q5 status
 Unchanged and still open. The 6a window is for Bryn's own testing only; nobody else gets a build until Q1 and Q5 are decided.
+
+
+## Milestone 6b (displays)
+
+### M6-f Scale and bank view: decided (Bryn, 2026-10-27)
+No scale or bank view on the ring. The ring always shows the play-mode rotation (`led_ring.c display_filter_rotation`), as the firmware does outside Scale mode.
+
+### M6-g Clip and peak sampling (new, plugin limit)
+The audio side looks at core state once per host block, after the block (`PluginProcessor.cpp processBlock`). The core runs several 16-frame blocks inside one host block (about 64 at 512 frames and 48 kHz). The slider clip test (`DisplayModel.h sliderClipBits`, from `filter.c process_audio_block`, which uses `filter_out[j][0]` of one block) therefore sees only the last core block of each host block; a clip that ends earlier in the host block is missed. Seeing every core block would mean calling `BlockAdapter::process` in pieces of a few host frames (an audio-path change, to be proved bit-identical by the existing buffer-size checks); not done. The input clip LED uses a different rule from the hardware on purpose: lit if any host input sample of the block is above 0.6875 (the firmware's LED pin follows only the last sample of each 16-frame block, `audio_util.c`). Both clip indicators show for at least one window frame (about 33 ms); the firmware's own flash is about 2.4 ms (`leds.c`, 50 PWM steps at 20.5 kHz), too short to see.
+**Manual against source, input clip:** the manual says the LED lights at about 19.2 Vpp or +/-9.6 V; `audio_util.c` compares `sample > INPUT_LED_CLIP_LEVEL` with no absolute value, so only positive samples light it. The plugin follows the source. The 0.6875 level is `0x58000000 / 2^31` on the placeholder level scale (M1-n): if M1-n changes, this level changes with it.
+
+### M6-h Timing and brightness (new, placeholders and plugin choices)
+- Locked-channel ring flash: the firmware toggles it once per ring redraw, every 2001 main-loop passes (`led_ring.c update_LED_ring`). The main-loop rate is the M2-c placeholder (12000 per second), so the window flashes every 166.75 ms (`DisplayModel.h kRingFlashMs`). Needs a count from the real SMR: lock one channel, count the ring LED's flashes in 10 s.
+- Ring brightness in the window updates every frame (about 30 per second) instead of only at the firmware's redraws.
+- Ring and Env Out brightness: the firmware's 12 bit duty value, with 1023 (its clamp) drawn as the full colour and 0 as a dark lens. The driver's maximum duty for 1023 is about a quarter (1023 / 4096), so the window is brighter than the duty alone says. Plugin choice, one constant (`ledColour` in `PluginEditor.cpp`).
+- Slider LED: literal firmware ratio (decided by Bryn): duty = `channel_level / 4`, so 25 % at the top; a clip shows it fully on with a halo. Drawn inside the slider thumb as a dark lens that turns white.
+- Meters: plugin only, dashed. Peak of the host input and output buffers per window frame, bar -60 to 0 dBFS, fall 24 dB per second, hold line 1 s then 12 dB per second; orange above 0 dBFS. Constants at the top of `Content` in `PluginEditor.cpp`.
+
+### M6-i Ring orientation (new)
+Index 0 at the top is from `led_ring.c display_scale` (top half is positions 15 to 5, scale 0 at 15). Index growing clockwise is from the panel photo only. Not in the source. Bryn can check on the SMR: tap Rotate Clockwise once and see which way the pattern moves.
+
+### M6-j Meter labels (new)
+In: "odds" is input slot 1, which feeds channels 1, 3, 5 (`Engine.h processBlock`), by the source; not measured. Out: labelled L and R (host left and right) because the output mapping is still open (M1-m, M3-a); the sketch's "odds, evens" is not used.

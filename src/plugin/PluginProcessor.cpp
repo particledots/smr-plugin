@@ -83,6 +83,7 @@ void SmrAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     {
         setLatencySamples (0);
         latencyStat.store (0);
+        display.publish (smr_plugin::DisplayData{});     // nothing is running: the window's lights go dark
         return;
     }
 
@@ -173,6 +174,22 @@ void SmrAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     float* ch1 = nOut > 1 ? buffer.getWritePointer (1) : nullptr;
     const float* in1 = nIn > 1 ? buffer.getReadPointer (1) : nullptr;   // null: mono input, copied to both input slots
 
+    // Window only (Milestone 6b): input peaks and the input clip test, read before the in-place processing overwrites them.
+    // Positive samples only, as audio_util.c does (no absolute value); mono input feeds both slots.
+    float peakIn0 = 0.0f, peakIn1 = 0.0f;
+    bool inClip = false;
+    {
+        const float* a = ch0;
+        const float* b = in1 != nullptr ? in1 : ch0;
+        for (int k = 0; k < n; ++k)
+        {
+            peakIn0 = juce::jmax (peakIn0, std::abs (a[k]));
+            peakIn1 = juce::jmax (peakIn1, std::abs (b[k]));
+            inClip = inClip || a[k] > smr_plugin::kInputClipFloat || b[k] > smr_plugin::kInputClipFloat;
+        }
+    }
+    float peakOut0 = 0.0f, peakOut1 = 0.0f;
+
     const int chunk = (int) scratch.size();
     for (int off = 0; off < n; off += chunk)
     {
@@ -180,12 +197,30 @@ void SmrAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         float* outR = ch1 != nullptr ? ch1 + off : scratch.data();
         adapter.process (ch0 + off, in1 != nullptr ? in1 + off : nullptr, ch0 + off, outR, m);
 
+        for (int k = 0; k < m; ++k)       // window only: the two output slots before a mono host output sums them
+        {
+            peakOut0 = juce::jmax (peakOut0, std::abs (ch0[off + k]));
+            peakOut1 = juce::jmax (peakOut1, std::abs (outR[k]));
+        }
+
         if (ch1 == nullptr)
             for (int k = 0; k < m; ++k) ch0[off + k] += scratch[(size_t) k];
     }
 
     for (int ch = 2; ch < nOut; ++ch)
         buffer.clear (ch, 0, n);
+
+    // Window only: a read-only copy of core state, clip events and peaks. No locks, no allocation, no writes to the core.
+    {
+        smr_plugin::DisplayData dd;
+        smr_plugin::fillDisplayData (engine, dd);
+        display.publish (dd);
+        display.addClipBits (smr_plugin::sliderClipBits (engine) | (inClip ? smr_plugin::kInputClipBit : 0u));
+        display.notePeak (0, peakIn0);
+        display.notePeak (1, peakIn1);
+        display.notePeak (2, peakOut0);
+        display.notePeak (3, peakOut1);
+    }
 
     {
         const juce::SpinLock::ScopedTryLockType lock (stateLock);

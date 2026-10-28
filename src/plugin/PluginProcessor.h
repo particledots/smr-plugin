@@ -8,6 +8,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "BlockAdapter.h"
+#include "DisplayModel.h"
 #include "ParamMap.h"
 
 class SmrAudioProcessor : public juce::AudioProcessor
@@ -56,6 +57,10 @@ public:
     uint32_t triggerRisingCount (int which) const noexcept  { return trigSeenStat[which & 3].load(); }
     uint32_t triggerFallingCount (int which) const noexcept { return trigReleasedStat[which & 3].load(); }
 
+    // Read-only copy of core state for the window's lights and meters (Milestone 6b). Written by the audio thread after each host
+    // block, read by the editor; nothing flows back (docs/m6b-led-notes.md).
+    smr_plugin::DisplayHub& displayHub() noexcept { return display; }
+
     // Resonators ring after the input stops; hosts use this to keep rendering a bounce (docs/open-questions.md M4-g).
     static constexpr double kTailSeconds = 10.0;
 
@@ -71,6 +76,7 @@ private:
     smr_host::BlockAdapter adapter;
     smr_plugin::ParamApplier applier;
     std::vector<float> scratch;     // second output slot when the host output is mono
+    smr_plugin::DisplayHub display;
 
     // Hand-off between the message thread (project load and save) and the audio thread. Try-locks on the audio side.
     juce::SpinLock stateLock;

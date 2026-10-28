@@ -68,6 +68,20 @@ namespace smrui
             g.fillRoundedRectangle (thumb, 4.0f);
             g.setColour (s.findColour (juce::Slider::trackColourId));
             g.drawRoundedRectangle (thumb, 4.0f, 1.6f);
+
+            // The slider's white LED (Milestone 6b), inset in the thumb. "led" is the firmware's duty (channel_level / 4, 25 % at the
+            // top, leds.c update_slider_LEDs); "ledclip" switches it fully on (filter.c process_audio_block). Off is a dark lens.
+            const float duty = (float) s.getProperties().getWithDefault ("led", 0.0f);
+            const bool clip = (bool) s.getProperties().getWithDefault ("ledclip", false);
+            const float b = clip ? 1.0f : juce::jlimit (0.0f, 1.0f, duty);
+            const juce::Rectangle<float> led (cx - 9.0f, sliderPos - 2.5f, 18.0f, 5.0f);
+            if (clip)
+            {
+                g.setColour (juce::Colours::white.withAlpha (0.45f));
+                g.fillRoundedRectangle (led.expanded (4.0f, 3.0f), 5.0f);
+            }
+            g.setColour (juce::Colour (0xff2a2a2a).interpolatedWith (juce::Colours::white, b));
+            g.fillRoundedRectangle (led, 2.5f);
         }
 
         void drawRotarySlider (juce::Graphics& g, int x, int y, int w, int h, float pos,

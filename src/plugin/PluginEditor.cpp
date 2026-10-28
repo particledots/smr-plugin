@@ -1,6 +1,10 @@
 #include "PluginEditor.h"
 
+#include <cmath>
+#include <cstring>
 #include <vector>
+
+#include "DisplayModel.h"
 
 // The editor's content is laid out on a fixed 1000 x 824 canvas (sketch v3 at half size) and scaled to the window.
 class SmrAudioProcessorEditor::Content : public juce::Component
@@ -98,6 +102,83 @@ public:
         }
     }
 
+    // Milestone 6b: take the latest copy of core state from the audio side and redraw what changed. Read only: nothing goes back.
+    // dtMs: time since the previous call.
+    void updateDisplay (smr_plugin::DisplayHub& hub, float dtMs)
+    {
+        using namespace smr_plugin;
+
+        DisplayData d = last;
+        if (! hub.read (d)) d = last;          // no consistent copy this time: keep the previous frame
+        last = d;
+
+        flashAccMs += (double) dtMs;
+        while (flashAccMs >= kRingFlashMs) { flashAccMs -= kRingFlashMs; flash = ! flash; }
+
+        uint16_t newRing[kRingLeds][3] = {};
+        uint16_t newEnv[6][3] = {};
+        if (d.valid != 0)
+        {
+            ringLeds (d, flash, newRing);
+            envOutLeds (d, newEnv);
+        }
+        if (std::memcmp (newRing, ringLed, sizeof ringLed) != 0)
+        {
+            std::memcpy (ringLed, newRing, sizeof ringLed);
+            repaint (312, 506, 376, 238);
+        }
+        for (int c = 0; c < 6; ++c)
+            if (std::memcmp (newEnv[c], envLed[c], sizeof envLed[c]) != 0)
+            {
+                std::memcpy (envLed[c], newEnv[c], sizeof envLed[c]);
+                repaint (kStripX[c] - 13, kEnvY - 13, 26, 26);
+            }
+
+        // Slider LEDs and the input clip LED. Clip events collected since the last frame show for this frame.
+        const uint32_t bits = hub.takeClipBits();
+        for (int i = 0; i < 6; ++i)
+        {
+            const float duty = d.valid != 0 ? sliderLedDuty (d.level[i]) : 0.0f;
+            const bool clip = (bits & (1u << i)) != 0;
+            if (duty != sliderDuty[i] || clip != sliderClip[i])
+            {
+                sliderDuty[i] = duty;
+                sliderClip[i] = clip;
+                levels[i].getProperties().set ("led", duty);
+                levels[i].getProperties().set ("ledclip", clip);
+                levels[i].repaint();
+            }
+        }
+        const bool inClip = (bits & kInputClipBit) != 0;
+        if (inClip != inClipOn)
+        {
+            inClipOn = inClip;
+            repaint (kClipX - 8, kClipY - 8, 16, 16);
+        }
+
+        // Meters (plugin only, not in the firmware): peak of each host buffer, fast rise, slow fall, peak hold.
+        for (int k = 0; k < 4; ++k)
+        {
+            const float peak = hub.takePeak (k);
+            const float db = peak > 1.0e-5f ? 20.0f * std::log10 (peak) : -100.0f;
+            Meter& m = meters[k];
+            m.shown = juce::jmax (db, m.shown - kMeterFallDbPerSec * dtMs / 1000.0f);
+            if (db >= m.hold) { m.hold = db; m.holdAgeMs = 0.0f; }
+            else
+            {
+                m.holdAgeMs += dtMs;
+                if (m.holdAgeMs > kMeterHoldMs) m.hold = juce::jmax (m.shown, m.hold - kMeterHoldFallDbPerSec * dtMs / 1000.0f);
+            }
+            const int fillPx = meterPixels (m.shown), holdPx = meterPixels (m.hold);
+            const bool over = m.shown > 0.0f;
+            if (fillPx != m.fillPx || holdPx != m.holdPx || over != m.over)
+            {
+                m.fillPx = fillPx; m.holdPx = holdPx; m.over = over;
+                repaint (meterX (k) - 2, kMeterY - 2, kMeterW + 4, kMeterH + 4);
+            }
+        }
+    }
+
     void paint (juce::Graphics& g) override
     {
         static const int stripX[6] = { 231, 342, 454, 566, 678, 790 };
@@ -164,12 +245,99 @@ public:
         g.setFont (13.0f);
         g.drawText ("dashed outline = plugin only", juce::Rectangle<float> (645.0f, 760.0f, 190.0f, 24.0f), juce::Justification::centredLeft, false);
 
+        // Milestone 6b lights. Brightness is the firmware's 12 bit duty value (1023 is its clamp) drawn on a dark lens: 0 is the lens,
+        // 1023 is the full colour. Colours are led_ring.c DEFAULT_COLOR_CH[0]. Ring: index i sits i x 18 degrees clockwise from the
+        // top (docs/open-questions.md M6-i); the ellipse is the sketch's.
+        for (int i = 0; i < smr_plugin::kRingLeds; ++i)
+        {
+            const float a = (float) i * juce::MathConstants<float>::twoPi / (float) smr_plugin::kRingLeds;
+            const float x = kRingCx + kRingRx * std::sin (a), y = kRingCy - kRingRy * std::cos (a);
+            g.setColour (ledColour (ringLed[i]));
+            g.fillEllipse (x - 9.0f, y - 9.0f, 18.0f, 18.0f);
+            g.setColour (smrui::edge());
+            g.drawEllipse (x - 9.0f, y - 9.0f, 18.0f, 18.0f, 1.0f);
+        }
+
+        g.setColour (smrui::softInk());
+        g.setFont (16.0f);
+        label (g, "Env out", 510.0f, 475.0f, 100.0f);
+        for (int c = 0; c < 6; ++c)
+        {
+            g.setColour (ledColour (envLed[c]));
+            g.fillEllipse ((float) stripX[c] - 11.0f, (float) kEnvY - 11.0f, 22.0f, 22.0f);
+            g.setColour (smrui::edge());
+            g.drawEllipse ((float) stripX[c] - 11.0f, (float) kEnvY - 11.0f, 22.0f, 22.0f, 1.0f);
+        }
+
+        // Input clip LED (one LED between the IN jacks, panel photo). Colour from the photo; the firmware only switches a pin.
+        g.setColour (inClipOn ? juce::Colour (0xffffd21f) : juce::Colour (0xff4a4430));
+        g.fillEllipse ((float) kClipX - 6.0f, (float) kClipY - 6.0f, 12.0f, 12.0f);
+        g.setColour (smrui::edge());
+        g.drawEllipse ((float) kClipX - 6.0f, (float) kClipY - 6.0f, 12.0f, 12.0f, 1.0f);
+        g.setColour (smrui::softInk());
+        g.setFont (11.0f);
+        label (g, "clip", (float) kClipX, (float) kClipY + 15.0f, 40.0f);
+
+        // In and Out meters: plugin only, so dashed.
+        for (int k = 0; k < 4; ++k)
+        {
+            const Meter& m = meters[k];
+            const float x = (float) meterX (k), y = (float) kMeterY, w = (float) kMeterW, h = (float) kMeterH;
+            if (m.fillPx > 0)
+            {
+                g.setColour (m.over ? juce::Colour (0xffe07a3c) : juce::Colour (0xff7cc4ad));
+                g.fillRoundedRectangle (x, y + h - (float) m.fillPx, w, (float) m.fillPx, 2.0f);
+            }
+            if (m.holdPx > 0)
+            {
+                g.setColour (juce::Colour (0xff0f7a63));
+                g.fillRect (x, y + h - (float) m.holdPx - 1.0f, w, 2.0f);
+            }
+            g.setColour (smrui::edge());
+            smrui::dashedRoundedRect (g, juce::Rectangle<float> (x - 1.0f, y - 1.0f, w + 2.0f, h + 2.0f), 3.0f);
+        }
+        g.setColour (smrui::softInk());
+        g.setFont (13.0f);
+        label (g, "In: odds " + dot + " evens", 74.0f, 641.0f, 130.0f);
+        label (g, "Out: L " + dot + " R", 926.0f, 641.0f, 100.0f);
+
         // Value of the control being dragged.
         g.setFont (14.0f);
         g.drawText (readout, juce::Rectangle<float> (176.0f, 796.0f, 640.0f, 20.0f), juce::Justification::centredLeft, false);
     }
 
 private:
+    // Milestone 6b geometry on the 1000 x 824 canvas (sketch v3 at half size).
+    static constexpr int kStripX[6] = { 231, 342, 454, 566, 678, 790 };
+    static constexpr int kEnvY = 450;
+    static constexpr float kRingCx = 500.0f, kRingCy = 625.0f, kRingRx = 176.0f, kRingRy = 106.0f;
+    static constexpr int kClipX = 126, kClipY = 556;
+    static constexpr int kMeterY = 547, kMeterW = 14, kMeterH = 75;
+    static int meterX (int k) { static const int x[4] = { 53, 80, 906, 932 }; return x[k & 3]; }
+    // Plugin-only meter ballistics (not from the firmware): -60 dBFS at the bottom, 0 dBFS at the top.
+    static constexpr float kMeterFallDbPerSec = 24.0f, kMeterHoldMs = 1000.0f, kMeterHoldFallDbPerSec = 12.0f;
+    static int meterPixels (float db) { return juce::roundToInt (juce::jlimit (0.0f, 1.0f, (db + 60.0f) / 60.0f) * (float) kMeterH); }
+
+    // A lens that is dark at 0 and shows the full colour at 1023 (the firmware's clamp; the driver is 12 bit, docs/m6b-led-notes.md).
+    static juce::Colour ledColour (const uint16_t* rgb)
+    {
+        constexpr float base = 0.17f;
+        auto ch = [] (uint16_t v) { return juce::jmin (1.0f, base + ((float) v / 1023.0f) * (1.0f - base)); };
+        return juce::Colour::fromFloatRGBA (ch (rgb[0]), ch (rgb[1]), ch (rgb[2]), 1.0f);
+    }
+
+    struct Meter { float shown = -100.0f, hold = -100.0f, holdAgeMs = 0.0f; int fillPx = 0, holdPx = 0; bool over = false; };
+
+    smr_plugin::DisplayData last;
+    uint16_t ringLed[smr_plugin::kRingLeds][3] = {};
+    uint16_t envLed[6][3] = {};
+    float sliderDuty[6] = {};
+    bool sliderClip[6] = {};
+    bool inClipOn = false;
+    bool flash = false;
+    double flashAccMs = 0.0;
+    Meter meters[4];
+
     // Trigger k: 0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down. The processor outlives the editor.
     smrui::TriggerLink linkFor (SmrAudioProcessor& p, int k)
     {
@@ -260,7 +428,7 @@ SmrAudioProcessorEditor::SmrAudioProcessorEditor (SmrAudioProcessor& p)
     setSize (900, 742);
 
     timerCallback();
-    startTimer (250);
+    startTimer (kFrameMs);
 }
 
 SmrAudioProcessorEditor::~SmrAudioProcessorEditor()
@@ -279,6 +447,14 @@ void SmrAudioProcessorEditor::resized()
 
 void SmrAudioProcessorEditor::timerCallback()
 {
+    // Lights and meters every frame (Milestone 6b), the status lines about four times a second.
+    const double now = juce::Time::getMillisecondCounterHiRes();
+    const float dtMs = lastTickMs > 0.0 ? (float) juce::jlimit (1.0, 250.0, now - lastTickMs) : (float) kFrameMs;
+    lastTickMs = now;
+    content->updateDisplay (proc.displayHub(), dtMs);
+    if (tickCount++ % 8 != 0)
+        return;
+
     const auto s = proc.status();
     juce::String t;
     if (s.rateSupported)
