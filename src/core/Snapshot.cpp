@@ -80,7 +80,8 @@ namespace smr
         int numFreqBlocked = 0;
         for (int j = 0; j < kNumScaleBanks; ++j)
             if (freqblock & (1u << j)) ++numFreqBlocked;
-        if (numFreqBlocked > 14) freqblock = 0;   // "invalid"
+        num_freq_blocked = numFreqBlocked;
+        if (numFreqBlocked > 14) { freqblock = 0; num_freq_blocked = 0; }   // "invalid"
 
         bool alreadySetHover = false;
         for (int i = 0; i < kNumChannels; ++i)

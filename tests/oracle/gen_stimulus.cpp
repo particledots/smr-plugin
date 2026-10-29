@@ -1,5 +1,5 @@
 // Writes the stimulus files for the differential test. Deterministic (fixed seeds); no input files.
-//   gen_stimulus <scenario 0..8> <steps> <out>
+//   gen_stimulus <scenario 0..9> <steps> <out>
 // Scenarios (docs/architecture.md section 14, V1): every scenario uses a different mix of filter mode and
 // type, bank changes, Q, morph, rotation, spread, scale CV, levels, locks and tick schedules.
 #include <cmath>
@@ -38,7 +38,7 @@ namespace
 
 int main (int argc, char** argv)
 {
-    if (argc < 4) { std::printf ("usage: gen_stimulus <scenario 0..8> <steps> <out>\n"); return 2; }
+    if (argc < 4) { std::printf ("usage: gen_stimulus <scenario 0..9> <steps> <out>\n"); return 2; }
     const int scenario = std::atoi (argv[1]);
     const int n = std::atoi (argv[2]);
     Rng r (0x1234567u + (uint32_t) scenario * 7919u);
@@ -50,7 +50,7 @@ int main (int argc, char** argv)
 
     // scenario table: filter mode (2 TWOPASS, 3 ONEPASS), type (1 MAXQ, 0 BPRE), walker speed, bank interval, event rate (one in N steps)
     struct Sc { int mode, type, speed, bankEvery, eventOneIn, amp; bool randomTicks, extremes, switching; };
-    static const Sc table[9] = {
+    static const Sc table[10] = {
         /* 0 */ { 2, 1,  6, 400,  900, 1 << 18, false, false, false },   // two-pass MAXQ, slow controls
         /* 1 */ { 2, 1, 60, 300,  120, 1 << 18, false, false, false },   // two-pass MAXQ, fast controls, many events
         /* 2 */ { 3, 1, 12, 350,  300, 1 << 26, false, false, false },   // one-pass MAXQ
@@ -60,14 +60,24 @@ int main (int argc, char** argv)
         /* 6 */ { 3, 0, 300, 250, 100, 1 << 25, true,  true,  false },  // BpRe, extreme control jumps
         /* 7 */ { 2, 1, 300, 250, 100, 1 << 18, false, true,  true  },  // two-pass, extreme control jumps, switching
         /* 8 */ { 2, 1,  6, 400,  900, 1 << 18, false, false, false },  // like 0, but the Freq Nudge controls move in short windows only (Milestone 7 step 3b)
+        /* 9 */ { 2, 1,  6, 400,   60, 1 << 18, false, false, false },  // like 0 with many Rotate events; forbidden notes by Lock pins and ROTATE press pulses (Milestone 7 step 4)
     };
-    if (scenario < 0 || scenario > 8) { std::printf ("FAIL: scenario out of range\n"); return 2; }
+    if (scenario < 0 || scenario > 9) { std::printf ("FAIL: scenario out of range\n"); return 2; }
     const Sc sc = table[scenario];
     // Scenario 8 (Milestone 7 step 3b): the display timers of params.c param_read_freq (DISPLAYTIME_NUDGEONESIDE 12000 and
     // DISPLAYTIME_NUDGEBOTHSIDES 25000 TIM10 ticks, about 3.4 per step) only expire when nothing touches the Nudge knobs, the Lock
     // buttons or the 135/246 switches for thousands of steps. So: Odds Nudge moves in steps 0..199, Evens Nudge in 4000..4199, both in
     // 16000..16199, and in between those controls are frozen (Freq CV and Nudge are summed in t_fo/t_fe, so the Freq CVs freeze too).
     const bool quiet = (scenario == 8);
+    // Scenario 9 (Milestone 7 step 4): forbidden notes. The generator above is used as it is; then, in 100-step cycles, the Lock button pins
+    // are held (steps 2 to 39 of a cycle) for a random set of channels (one in 25 cycles: all six, so that the blocks can build up to the limit of 14 between clears) and ROTATE press pulses (events bit 4)
+    // fall in steps 20 and 30, and now and then at step 60 with no Lock held. lock_pressed[] and lock_down[] come from the pins through
+    // process_lock_buttons (events bit 6), and freqblock is the firmware's own (events bit 5), so blocks, unblocks, the 14 limit, clear all
+    // and the "release does not toggle the Lock" flag all run for real.
+    const bool forb = (scenario == 9);
+    Rng rf (0xF0B1DDE7u);
+    uint32_t cycMask = 0;
+    bool cycPulseA = false, cycPulseB = false, cycPulseIdle = false;
     auto windowOdds  = [] (int i) { return i < 200 || (i >= 16000 && i < 16200); };
     auto windowEvens = [] (int i) { return (i >= 4000 && i < 4200) || (i >= 16000 && i < 16200); };
 
@@ -190,6 +200,31 @@ int main (int argc, char** argv)
         s.lock_button_mask = (uint8_t) pinMask;
         if (nearLeft > 0) { s.lock_down_near = 1; --nearLeft; }
 
+        if (forb)
+        {
+            const int ph = i % 100;
+            if (ph == 0)
+            {
+                cycMask = 0;
+                if (rf.chance (25)) cycMask = 0x3F;
+                else
+                {
+                    const int nl = 1 + (int) rf.below (3);
+                    for (int k = 0; k < nl; ++k) cycMask |= 1u << rf.below (6);
+                }
+                cycPulseA = ! rf.chance (8);
+                cycPulseB = rf.chance (8);
+                cycPulseIdle = rf.chance (3);
+            }
+            pinMask = (ph >= 2 && ph < 40) ? cycMask : 0;
+            s.lock_button_mask = (uint8_t) pinMask;
+            s.lock_pressed_mask = 0;
+            s.lock_down_big = 0;
+            s.lock_down_near = 0;
+            s.events |= 32 | 64;
+            if ((ph == 20 && cycPulseA) || (ph == 30 && cycPulseB) || (ph == 60 && cycPulseIdle)) s.events |= 16;
+        }
+
         // freqblock: at most 8 of the 20 positions
         if (r.chance (1500))
         {
@@ -197,7 +232,7 @@ int main (int argc, char** argv)
             const int nb = (int) r.below (9);
             for (int k = 0; k < nb; ++k) freqblock |= 1u << r.below (20);
         }
-        s.freqblock = freqblock;
+        s.freqblock = forb ? 0u : freqblock;
 
         // ticks
         if (sc.randomTicks)

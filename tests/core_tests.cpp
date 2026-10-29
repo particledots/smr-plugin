@@ -252,6 +252,109 @@ namespace
     }
 
     // ---------------------------------------------------------------------------------------------------------
+    // Milestone 7, step 4: params.c process_freq_blocks (forbidden notes). The oracle (V1 scenario 9) compares the same function with the
+    // firmware; these check the behaviour in plain terms, with values worked out by hand from the source.
+    void testForbiddenNotes()
+    {
+        auto fresh = [] {
+            std::unique_ptr<smr::Engine> e (new smr::Engine());
+            e->setControls (defaultControls());
+            e->reset();
+            return e;
+        };
+        auto passes = [] (smr::Engine& e, int n) { for (int k = 0; k < n; ++k) e.runLoopPass(); };
+        auto hold = [&] (smr::Engine& e, unsigned chans) { for (int k = 0; k < 6; ++k) e.setLockButton (k, (chans >> k) & 1); passes (e, 10); };
+        auto release = [&] (smr::Engine& e) { for (int k = 0; k < 6; ++k) e.setLockButton (k, false); passes (e, 10); };
+
+        {   // Lock held + ROTATE press: the note the channel is on is forbidden, and the release does not toggle the Lock
+            auto e = fresh();
+            passes (*e, 3);
+            e->note[0] = 5; e->note[1] = 8;
+            hold (*e, 0b000001);
+            check (e->lock_pressed[0] == 1, "M7 forbid: Lock 1 held for 10 passes is lock_pressed");
+            e->triggerRotaryPress(); passes (*e, 1);
+            check (e->freqblock == (1u << 5) && e->num_freq_blocked == 1 && e->already_handled_lock_release[0] == 1 && e->rotary_switch_b == 0,
+                   "M7 forbid: Lock 1 + ROTATE press blocks note 5 only, counts 1, marks the release handled, and the press pulse is consumed");
+            passes (*e, 20);
+            check (e->freqblock == (1u << 5), "M7 forbid: no further change without another press");
+            release (*e);
+            check (e->lock[0] == 0, "M7 forbid: releasing the Lock after a block does not lock the channel (already_handled_lock_release)");
+            hold (*e, 0b000001);
+            e->triggerRotaryPress(); passes (*e, 1);
+            check (e->freqblock == 0 && e->num_freq_blocked == 0, "M7 forbid: Lock 1 + press again on the same note allows it again");
+        }
+        {   // two Locks held: each channel's own note
+            auto e = fresh();
+            passes (*e, 3);
+            e->note[0] = 5; e->note[1] = 8; e->note[2] = 12;
+            hold (*e, 0b000011);
+            e->triggerRotaryPress(); passes (*e, 1);
+            check (e->freqblock == ((1u << 5) | (1u << 8)) && e->num_freq_blocked == 2, "M7 forbid: Locks 1 and 2 + press block notes 5 and 8, not channel 3's note 12");
+        }
+        {   // two held channels on the same note: the first blocks, the second then sees it blocked and unblocks (params.c loop order)
+            auto e = fresh();
+            passes (*e, 3);
+            e->note[0] = 7; e->note[1] = 7;
+            hold (*e, 0b000011);
+            e->triggerRotaryPress(); passes (*e, 1);
+            check (e->freqblock == 0 && e->num_freq_blocked == 0, "M7 forbid: two held channels on one note block and unblock it in one press (ported as the firmware does)");
+        }
+        {   // press with no Lock held: nothing
+            auto e = fresh();
+            passes (*e, 3);
+            e->note[0] = 5;
+            e->triggerRotaryPress(); passes (*e, 5);
+            check (e->freqblock == 0 && e->num_freq_blocked == 0 && e->rotary_switch_b == 0, "M7 forbid: a press with no Lock held changes nothing in the core and the pulse is gone after one pass");
+        }
+        {   // a pulse before the Lock is solidly down (lock_pressed not yet set) does nothing
+            auto e = fresh();
+            passes (*e, 3);
+            e->note[0] = 5;
+            e->setLockButton (0, true); passes (*e, 2);
+            e->triggerRotaryPress(); passes (*e, 1);
+            check (e->freqblock == 0, "M7 forbid: the press while the Lock is held under 5 passes does not block");
+        }
+        {   // the limit of 14
+            auto e = fresh();
+            passes (*e, 3);
+            check (e->setFreqBlock (0x3FFF) && e->num_freq_blocked == 14, "M7 forbid: setFreqBlock(14 bits) counts 14");
+            e->note[0] = 15; e->note[1] = 3;
+            hold (*e, 0b000001);
+            e->triggerRotaryPress(); passes (*e, 1);
+            check (e->freqblock == 0x3FFFu && e->num_freq_blocked == 14 && e->already_handled_lock_release[0] == 1,
+                   "M7 forbid: at 14 blocked notes a 15th is refused (num_freq_blocked < 14), but the release is still marked handled");
+            release (*e);
+            hold (*e, 0b000010);
+            e->triggerRotaryPress(); passes (*e, 1);
+            check (e->freqblock == (0x3FFFu & ~(1u << 3)) && e->num_freq_blocked == 13, "M7 forbid: at the limit a held channel on a blocked note still unblocks it (13 left)");
+        }
+        {   // all six Locks + press: clear every forbidden note, and no Lock toggles on release
+            auto e = fresh();
+            passes (*e, 3);
+            e->setFreqBlock (0b1010101);
+            hold (*e, 0b111111);
+            e->triggerRotaryPress(); passes (*e, 1);
+            bool allHandled = true;
+            for (int k = 0; k < 6; ++k) allHandled = allHandled && e->already_handled_lock_release[k] == 1;
+            check (e->freqblock == 0 && e->num_freq_blocked == 0 && allHandled, "M7 forbid: all six Locks + press clears every forbidden note and marks all six releases handled");
+            release (*e);
+            unsigned m = 0;
+            for (int k = 0; k < 6; ++k) m |= (unsigned) e->lock[k] << k;
+            check (m == 0, "M7 forbid: after the clear, releasing the six Locks locks none of them");
+        }
+        {   // saved state: the count follows setFreqBlock and loadSnapshot (system_mode.c load_params_from_sram)
+            auto e = fresh();
+            e->setFreqBlock (0b111);
+            check (e->num_freq_blocked == 3, "M7 forbid: setFreqBlock(3 bits) counts 3");
+            smr::Snapshot s = e->saveSnapshot();
+            auto f = fresh();
+            check (f->loadSnapshot (s) && f->freqblock == 0b111u && f->num_freq_blocked == 3, "M7 forbid: loadSnapshot restores freqblock and counts it");
+            s.freqblock = 0x7FFFu;   // 15 bits: the firmware calls this invalid and clears it
+            check (f->loadSnapshot (s) && f->freqblock == 0 && f->num_freq_blocked == 0, "M7 forbid: loadSnapshot with 15 blocked notes clears freqblock and the count");
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
     // Milestone 7, step 2: params.c process_lock_jacks. The oracle (V1) compares the same function with the firmware; these check the
     // behaviour in plain terms.
     void testLockJacks()
@@ -666,6 +769,7 @@ int main (int argc, char** argv)
     testLoopGuard();
     testLockButtons();
     testLockJacks();
+    testForbiddenNotes();
     testDefaultResonators();
     testAdapter();
     testResamplerRoundTrip();

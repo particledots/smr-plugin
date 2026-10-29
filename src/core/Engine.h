@@ -98,6 +98,8 @@ namespace smr
         float    envspeed_attack = 0.0f, envspeed_decay = 0.0f;
         uint16_t rotate_to_next_scale = 0;
         uint32_t freqblock = 0;
+        int      num_freq_blocked = 0;      // params.c: how many positions freqblock has set (at most 14)
+        uint8_t  rotary_switch_b = 0;       // params.c: one main-loop pass of 1 after the ROTATE press is debounced (Milestone 7, step 4)
         float    channel_level[kNumChannels] = {};
         float    CHANNEL_LEVEL_LPF = 0.0f;
 
@@ -270,6 +272,13 @@ namespace smr
         // changes nothing if mask has bits above bit 19 or more than 14 bits set.
         bool setFreqBlock (uint32_t mask) noexcept;
 
+        // ROTATE encoder press, reduced to what forbidden notes need (Milestone 7, step 4). params.c process_rotary_button
+        // debounces ROTARY_SW and sets rotary_switch_b to 1 for one main-loop pass; process_freq_blocks() reads it on the
+        // next pass. This call sets that one-pass flag directly; the debounce, the scale mode toggle (change_scale_mode), the
+        // bank hover and the long hold (System Mode) of process_rotary_button are not ported (docs/open-questions.md M7-k).
+        // With no Lock held the press does nothing in the core.
+        void triggerRotaryPress() noexcept { rotary_switch_b = 1; }
+
         // Plain inputs. Out-of-range channel numbers are ignored.
         // setLockButton: the Lock button pin. The main loop's process_lock_buttons() (Milestone 7) turns presses into lock_pressed[],
         // lock[] and q_locked[] exactly as the firmware does. setLock, setLockPressed and setLockDown write the state directly (tests).
@@ -316,6 +325,7 @@ namespace smr
         void process_scaleCV();
         void process_lock_jacks();
         void process_lock_buttons();
+        void process_freq_blocks();
         void init_freq_lpf();
         void set_default_user_scalebank();
 

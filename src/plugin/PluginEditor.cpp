@@ -52,6 +52,12 @@ public:
         addAndMakeVisible (*lockOdds);
         addAndMakeVisible (*lockEvens);
 
+        // The ROTATE encoder press (plugin only: the hardware has the encoder). With a Lock held it forbids, or allows again, the note that
+        // channel is on; all six Locks held clear every forbidden note (params.c process_freq_blocks). It has no other effect in this plugin.
+        rotPress = std::make_unique<smrui::PulseButton> ("Rotate press", *apvts.getParameter ("rotatepress"), 0, true, linkFor (p, 6));
+        place (*rotPress, 253, 606, 124, 32);
+        addAndMakeVisible (*rotPress);
+
         // Res (Q), Morph, Spread.
         knob (qKnob, "q", 106, 723, 72);
         knob (morph, "morph", 860, 723, 56);
@@ -103,8 +109,8 @@ public:
     void setTriggerSeen (const uint32_t* seen)
     {
         juce::String t ("triggers sent/seen:   ");
-        static const char* const names[6] = { "Rot CW", "Rot CCW", "Scale up", "Scale down", "Lock 135", "Lock 246" };
-        for (int k = 0; k < 6; ++k)
+        static const char* const names[7] = { "Rot CW", "Rot CCW", "Scale up", "Scale down", "Lock 135", "Lock 246", "Rot press" };
+        for (int k = 0; k < 7; ++k)
             t << (k ? "   " : "") << names[k] << " " << (juce::int64) sent[k] << "/" << (juce::int64) seen[k];
         if (t != diagText)
         {
@@ -388,7 +394,7 @@ private:
     bool envFwActive = false;
     Meter meters[4];
 
-    // Trigger k: 0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down, 4 Lock jack 1 3 5, 5 Lock jack 2 4 6. The processor outlives the editor.
+    // Trigger k: 0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down, 4 Lock jack 1 3 5, 5 Lock jack 2 4 6, 6 Rotate press. The processor outlives the editor.
     smrui::TriggerLink linkFor (SmrAudioProcessor& p, int k)
     {
         smrui::TriggerLink l;
@@ -448,13 +454,13 @@ private:
 
     juce::AudioProcessorValueTreeState& apvts;
     juce::String statusText, readout, diagText;
-    uint32_t sent[6] = {};
+    uint32_t sent[7] = {};
 
     juce::Slider levels[6], nudge[2], freq[2], qKnob, morph, spread;
     std::unique_ptr<smrui::LockButton> locks[6];
     juce::ComboBox filterMode, filterType, bank;
     std::unique_ptr<smrui::SlideSwitch> oddsSwitch, evensSwitch, slewSwitch, scaleRotSwitch, prePostSwitch, envSwitch;
-    std::unique_ptr<smrui::PulseButton> rotCcw, rotCw, scaleDown, scaleUp, lockOdds, lockEvens;
+    std::unique_ptr<smrui::PulseButton> rotCcw, rotCw, scaleDown, scaleUp, lockOdds, lockEvens, rotPress;
     std::unique_ptr<smrui::RotateDial> dial;
 
     // Declared last so they are destroyed first, while the controls they point to still exist.

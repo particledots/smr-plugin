@@ -807,6 +807,33 @@ namespace
         proc->releaseResources();
     }
 
+    // Milestone 7, step 4: the Rotate press trigger parameter through the real processor (counters only; the forbidden-note logic is in the core and param tests).
+    void testRotatePressSync()
+    {
+        auto proc = std::make_unique<SmrAudioProcessor>();
+        proc->setRateAndBufferSizeDetails (48000.0, 512);
+        proc->prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buf (2, 512);
+        juce::MidiBuffer midi;
+        auto blocks = [&] (int n) { for (int b = 0; b < n; ++b) { buf.clear(); proc->processBlock (buf, midi); } };
+        auto& apvts = proc->parameters();
+        auto raw = [&] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
+        auto setp = [&] (const char* id, float v) { auto* pp = apvts.getParameter (id); pp->setValueNotifyingHost (pp->convertTo0to1 (v)); };
+
+        blocks (300);
+        check (proc->triggerRisingCount (6) == 0, "rotate press: the counter is zero at the start");
+        setp ("lockhold1", 1.0f); blocks (30);
+        setp ("rotatepress", 1.0f); blocks (6);
+        setp ("rotatepress", 0.0f); blocks (6);
+        setp ("lockhold1", 0.0f); blocks (30);
+        proc->syncLockParameters();
+        const auto s = proc->status();
+        check (s.trigSeen[6] == 1 && proc->triggerRisingCount (6) == 1 && proc->triggerFallingCount (6) == 1,
+               "rotate press: one pulse is seen once by the audio side", fmt ("%.0f", (double) s.trigSeen[6]));
+        check (raw ("lock1") < 0.5f, "rotate press: the Lock 1 parameter stays off after a forbid (the release did not toggle the lock)", fmt ("%.0f", (double) raw ("lock1")));
+        proc->releaseResources();
+    }
+
     int selftest()
     {
         testLayouts();
@@ -823,6 +850,7 @@ namespace
         testDisplay();
         testLockHoldSync();
         testLockJackSync();
+        testRotatePressSync();
         std::printf ("%s: %d checks, %d failed\n", failures ? "FAIL" : "PASS", checks, failures);
         return failures ? 1 : 0;
     }

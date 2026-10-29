@@ -99,9 +99,9 @@ namespace smr
     }
 
     // main.c, the while(1) body, in the firmware's order. Not ported (UI and hardware only):
-    // check_errors, update_LED_ring, update_lock_leds, process_freq_blocks, process_rotary_button,
-    // process_rotary_rotation, check_rotary_pressed_repeatedly and the edit modes.
-    // process_lock_buttons is ported for ui_mode PLAY only (Milestone 7).
+    // check_errors, update_LED_ring, update_lock_leds, process_rotary_button (only its rotary_switch_b pulse, see
+    // triggerRotaryPress), process_rotary_rotation, check_rotary_pressed_repeatedly and the edit modes.
+    // process_lock_buttons and process_freq_blocks are ported for ui_mode PLAY only (Milestone 7).
     void Engine::runLoopPass()
     {
         int32_t t_spread;
@@ -114,6 +114,9 @@ namespace smr
         process_lock_jacks();
 
         process_lock_buttons();
+
+        process_freq_blocks();
+        rotary_switch_b = 0;   // process_rotary_button (next in main.c) clears it on the same pass: rotsw_down is 0 after the press pulse
 
         if (do_ROTUP)
         {
@@ -140,6 +143,7 @@ namespace smr
             if (mask & (1u << j)) ++n;
         if (n > 14) return false;
         freqblock = mask;
+        num_freq_blocked = n;
         return true;
     }
 
@@ -256,6 +260,59 @@ namespace smr
                 lock[1] = (uint8_t) (1 - lock[1]);
 
                 lock[3] = (uint8_t) (1 - lock[3]);
+            }
+        }
+    }
+
+    // params.c process_freq_blocks, ui_mode PLAY only (ui_mode is always PLAY in this port). Lock held plus the ROTATE press pulse
+    // (rotary_switch_b) forbids, or allows again, the note each held channel is on; all six Locks held plus the pulse clears every
+    // forbidden note. change_scale_mode and just_switched_to_change_scale_mode are not in the port (the ROTATE press toggle is not ported).
+    void Engine::process_freq_blocks()
+    {
+        int i;
+
+        if (lock_pressed[0] || lock_pressed[1] || lock_pressed[2] || lock_pressed[3] || lock_pressed[4] || lock_pressed[5])
+        {
+            if (rotary_switch_b)
+            {
+                // APPLY / CLEAR SINGLE FREQ BLOCKS
+                if (! (lock_pressed[0] && lock_pressed[1] && lock_pressed[2] && lock_pressed[3] && lock_pressed[4] && lock_pressed[5]))
+                {
+                    for (i = 0; i < kNumChannels; i++)
+                    {
+                        if (lock_pressed[i])
+                        {
+                            //disable lock state change
+                            already_handled_lock_release[i] = 1;
+
+                            // freq-block frequency if freq-unblocked, and less than 15 freq have been locked
+                            if ((! (freqblock & (1u << note[i]))) && (num_freq_blocked < 14))
+                            {
+                                freqblock |= (1u << note[i]);
+                                num_freq_blocked += 1;
+
+                            // freq-unblock frequency if freq-blocked
+                            }
+                            else if (freqblock & (1u << note[i]))
+                            {
+                                freqblock &= ~(1u << note[i]);
+                                num_freq_blocked -= 1;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // CLEAR ALL FREQBLOCKS
+                    freqblock = 0;
+                    num_freq_blocked = 0;
+                    already_handled_lock_release[0] = 1;
+                    already_handled_lock_release[1] = 1;
+                    already_handled_lock_release[2] = 1;
+                    already_handled_lock_release[3] = 1;
+                    already_handled_lock_release[4] = 1;
+                    already_handled_lock_release[5] = 1;
+                }
             }
         }
     }

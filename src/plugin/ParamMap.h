@@ -24,7 +24,8 @@ namespace smr_plugin
         RotateCw, RotateCcw, ScaleUp, ScaleDown,
         Bank, Lock, FilterMode, FilterType,
         LockHold,  // Milestone 7: the Lock button pin of one channel (params.c process_lock_buttons)
-        LockJackOdds, LockJackEvens   // Milestone 7: the two Lock jacks (params.c process_lock_jacks, do_LOCK135, do_LOCK246)
+        LockJackOdds, LockJackEvens,  // Milestone 7: the two Lock jacks (params.c process_lock_jacks, do_LOCK135, do_LOCK246)
+        RotatePress                   // Milestone 7, step 4: the ROTATE encoder press, for forbidden notes with a Lock held (params.c process_freq_blocks, rotary_switch_b)
     };
 
     struct ParamSpec
@@ -40,8 +41,8 @@ namespace smr_plugin
         const char* const* choices;
     };
 
-    constexpr int kNumParams = 49;
-    constexpr int kNumTriggers = 6;   // trigger 0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down, 4 Lock jack 1 3 5, 5 Lock jack 2 4 6
+    constexpr int kNumParams = 50;
+    constexpr int kNumTriggers = 7;   // trigger 0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down, 4 Lock jack 1 3 5, 5 Lock jack 2 4 6, 6 Rotate press
 
     const ParamSpec& spec (int index);
     int indexOfId (const char* id);                 // -1 if unknown

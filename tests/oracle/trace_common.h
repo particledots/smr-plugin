@@ -21,7 +21,7 @@ namespace smrtest
         uint16_t adc[15];
         uint16_t pot[7];
         uint8_t  sw;                // bit0 env_mode_pre, 1 mod246_six, 2 mod135_one, 3 range_mode, 4 env_speed_fast, 5 env_speed_slow, 6 rotary_sw, 7 cvlag
-        uint8_t  events;            // bit0 do_ROTUP, 1 do_ROTDOWN, 2 do_LOCK135, 3 do_LOCK246
+        uint8_t  events;            // bit0 do_ROTUP, 1 do_ROTDOWN, 2 do_LOCK135, 3 do_LOCK246; Milestone 7 step 4: bit4 ROTATE press pulse (rotary_switch_b = 1 for the next loop pass), bit5 freqblock_live (do not overwrite freqblock with the freqblock field: the firmware's own value is kept), bit6 locks_live (do not overwrite lock_pressed[] and lock_down[]: the Lock button pins drive them through process_lock_buttons)
         uint8_t  set_filter_mode;   // 0 keep, 2 TWOPASS, 3 ONEPASS (set directly, as system_mode.c does)
         uint8_t  set_filter_type;   // 0 keep, 1 change_filter_type(BPRE), 2 change_filter_type(MAXQ)
         uint8_t  set_bank_mask;     // bit i: scale_bank[i] = bank[i]
@@ -146,6 +146,10 @@ namespace smrtest
         const float* coarseAdj;         // coarse_adj[6]
         const float* coarseAdjLed;      // coarse_adj_led[6]
         uint32_t numClearStaged;        // num_clear_coarse_staged
+        // Milestone 7 step 4: forbidden notes (params.c process_freq_blocks)
+        uint32_t freqblock;             // freqblock
+        int32_t numFreqBlocked;         // num_freq_blocked
+        const uint8_t* handledRelease;  // already_handled_lock_release[6]
     };
 
     inline void emit (Trace& t, const View& v)
@@ -197,6 +201,9 @@ namespace smrtest
         arrf ("coarse_adj", v.coarseAdj, 6);
         arrf ("coarse_adj_led", v.coarseAdjLed, 6);
         t.w ("num_clear_coarse_staged", v.numClearStaged);
+        t.w ("freqblock", v.freqblock);
+        t.i ("num_freq_blocked", v.numFreqBlocked);
+        arru8 ("already_handled_lock_release", v.handledRelease, 6);
     }
 
     // Table dump used by V1a: a flat list of 32-bit words, written as a Trace with one "step".

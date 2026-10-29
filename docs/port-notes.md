@@ -59,6 +59,7 @@ Nothing here is confirmed until the CI annotations say so; see `docs/status.md`.
 - Core rate 96,000 Hz (M2-b); main loop 12 kHz (M2-c).
 - `ui_mode` is fixed at PLAY. Scale editing, calibration and the display are not ported.
 - `filter_out_a/b` are zero-initialised (the firmware has them in `.bss`).
+- ROTATE press (Milestone 7 step 4): only the part of `params.c process_rotary_button` that produces `rotary_switch_b` is represented, as `Engine::triggerRotaryPress()` (one main-loop pass of 1, read by `process_freq_blocks`, then cleared). The pin debounce (`rotsw_up`, `rotsw_down`), `change_scale_mode`, `just_switched_to_change_scale_mode`, `hover_scale_bank` on release, `rotary_button_hold_ctr` (the long hold into System Mode) and `process_rotary_rotation` are not ported. See docs/open-questions.md M7-k.
 
 ## The test oracle (tests/oracle)
 - `shim/stm32f4xx.h`, `shim/arm_math.h`, `shim/shim_globals.c` stand in for the ST libraries and the firmware's

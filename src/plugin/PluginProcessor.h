@@ -48,14 +48,14 @@ public:
         bool rateSupported = false;
         int latencySamples = 0;
         uint64_t underruns = 0;
-        uint32_t trigSeen[6] = {};      // rising edges the audio side has seen: Rotate CW, Rotate CCW, Scale Up, Scale Down, Lock jack 1 3 5, Lock jack 2 4 6
+        uint32_t trigSeen[7] = {};      // rising edges the audio side has seen: Rotate CW, Rotate CCW, Scale Up, Scale Down, Lock jack 1 3 5, Lock jack 2 4 6, Rotate press
     };
     Status status() const;
 
     // For the window's trigger buttons: how many rising and falling edges of each trigger parameter the audio side has seen
-    // (0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down, 4 Lock jack 1 3 5, 5 Lock jack 2 4 6). The window holds a trigger until the audio side has seen it.
-    uint32_t triggerRisingCount (int which) const noexcept  { return (unsigned) which < 6u ? trigSeenStat[which].load() : 0u; }
-    uint32_t triggerFallingCount (int which) const noexcept { return (unsigned) which < 6u ? trigReleasedStat[which].load() : 0u; }
+    // (0 Rotate CW, 1 Rotate CCW, 2 Scale Up, 3 Scale Down, 4 Lock jack 1 3 5, 5 Lock jack 2 4 6, 6 Rotate press). The window holds a trigger until the audio side has seen it.
+    uint32_t triggerRisingCount (int which) const noexcept  { return (unsigned) which < 7u ? trigSeenStat[which].load() : 0u; }
+    uint32_t triggerFallingCount (int which) const noexcept { return (unsigned) which < 7u ? trigReleasedStat[which].load() : 0u; }
 
     // Read-only copy of core state for the window's lights and meters (Milestone 6b). Written by the audio thread after each host
     // block, read by the editor; nothing flows back (docs/m6b-led-notes.md).
@@ -96,8 +96,8 @@ private:
     std::atomic<bool> rateSupportedStat { false };
     std::atomic<int> latencyStat { 0 };
     std::atomic<uint64_t> underrunStat { 0 };
-    std::atomic<uint32_t> trigSeenStat[6] = {};
-    std::atomic<uint32_t> trigReleasedStat[6] = {};
+    std::atomic<uint32_t> trigSeenStat[7] = {};
+    std::atomic<uint32_t> trigReleasedStat[7] = {};
     bool rateSupported = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SmrAudioProcessor)

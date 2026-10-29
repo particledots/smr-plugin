@@ -20,6 +20,7 @@ extern "C"
     void update_spread (int8_t t_spread);
     void process_lock_jacks (void);
     void process_lock_buttons (void);
+    void process_freq_blocks (void);
     void process_rotateCV (void);
     void process_scaleCV (void);
     void rotate_up (void);
@@ -42,6 +43,8 @@ extern "C"
     extern uint8_t note[6], scale[6], scale_bank[6], lock[6], lock_pressed[6], q_locked[6];
     extern uint32_t lock_down[6];
     extern uint32_t freqblock;
+    extern int num_freq_blocked, rotary_switch_b;
+    extern uint8_t already_handled_lock_release[6];
     extern uint32_t ENVOUT_PWM[6];
     extern float ENVOUT_preload[6];
     extern float motion_morphpos[6], freq_nudge[6], freq_shift[6], channel_level[6];
@@ -98,6 +101,11 @@ static void loopPass()
     process_lock_jacks();
 
     process_lock_buttons();
+
+    process_freq_blocks();
+    // main.c calls process_rotary_button next. It is not part of the port, but its else branch (rotary_switch_b = 0 on every pass that does not
+    // complete a press) is what ends the one-pass pulse, so the driver does that here. The press itself is the stimulus (events bit 4).
+    rotary_switch_b = 0;
 
     if (do_ROTUP)
     {
@@ -181,6 +189,9 @@ static void emitState (Trace& t)
     v.coarseAdj = coarse_adj;
     v.coarseAdjLed = coarse_adj_led;
     v.numClearStaged = num_clear_coarse_staged;
+    v.freqblock = freqblock;
+    v.numFreqBlocked = num_freq_blocked;
+    v.handledRelease = already_handled_lock_release;
     emit (t, v);
 }
 
@@ -205,12 +216,15 @@ static int runTrace (const char* stimPath, const char* outPath)
                 lock[k] = (s.lock_mask >> k) & 1;
                 q_locked[k] = (s.q_locked_mask >> k) & 1;
             }
-            lock_pressed[k] = (s.lock_pressed_mask >> k) & 1;
-            lock_down[k] = s.lock_down_big ? 40000u : 0u;
+            if (! (s.events & 64))   // bit 6: the Lock button pins drive lock_pressed[] and lock_down[] (Milestone 7 step 4)
+            {
+                lock_pressed[k] = (s.lock_pressed_mask >> k) & 1;
+                lock_down[k] = s.lock_down_big ? 40000u : 0u;
+            }
         }
         if (s.lock_down_near)
             for (int k = 0; k < 6; ++k) lock_down[k] = 49990u;
-        freqblock = s.freqblock;
+        if (! (s.events & 32)) freqblock = s.freqblock;
 
         oracle_set_lock_buttons (s.lock_button_mask);
         setInputs (s);
@@ -218,6 +232,7 @@ static int runTrace (const char* stimPath, const char* outPath)
         if (s.events & 2) do_ROTDOWN = 1;
         if (s.events & 4) do_LOCK135 = 1;
         if (s.events & 8) do_LOCK246 = 1;
+        if (s.events & 16) rotary_switch_b = 1;
 
         oracle_set_audio (s.inL, s.inR);
         process_audio_block (nullptr, nullptr, 0);

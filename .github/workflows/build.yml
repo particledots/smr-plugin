@@ -71,10 +71,10 @@ jobs:
             echo "$out"; echo "::error::V1a tables FAIL: $out"; exit 1
           fi
 
-      - name: V1 differential test (9 scenarios x 30000 blocks, bit for bit)
+      - name: V1 differential test (10 scenarios x 30000 blocks, bit for bit)
         run: |
           bad=0
-          for i in 0 1 2 3 4 5 6 7 8; do
+          for i in 0 1 2 3 4 5 6 7 8 9; do
             ./build_linux/gen_stimulus $i 30000 stim_$i.bin || { echo "::error::V1 scenario $i: gen_stimulus failed"; bad=1; continue; }
             ./oracle_driver trace stim_$i.bin oracle_$i.trace || { echo "::error::V1 scenario $i: oracle_driver failed"; bad=1; continue; }
             pout=$(./build_linux/port_driver trace stim_$i.bin port_$i.trace) || { echo "::error::V1 scenario $i: port_driver failed"; bad=1; continue; }

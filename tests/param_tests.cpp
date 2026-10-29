@@ -98,7 +98,7 @@ namespace
 
     void testTable()
     {
-        check (kNumParams == 49, "parameter count is 49", fmt ("%.0f", kNumParams));
+        check (kNumParams == 50, "parameter count is 50", fmt ("%.0f", kNumParams));
 
         bool unique = true, ranges = true, names = true, no4ms = true;
         for (int i = 0; i < kNumParams; ++i)
@@ -468,6 +468,46 @@ namespace
             r.p ("lockjack135") = 1.0f;
             r.start(); r.run (50);
             check (r.e->lock[0] == 0 && r.e->lock[2] == 0 && r.e->lock[4] == 0, "a Lock jack parameter that is on at start does not fire (initial apply only remembers it)");
+        }
+
+        // Milestone 7, step 4: the Rotate press trigger (params.c process_freq_blocks, forbidden notes).
+        {
+            Rig r;
+            r.start(); r.run (50);
+            r.e->note[0] = 5;
+            r.pulse ("rotatepress"); r.run (50);
+            check (r.e->freqblock == 0 && r.e->num_freq_blocked == 0 && r.ap.triggerEdges (6) == 1, "Rotate press with no Lock held changes nothing in the core, and the press is counted (index 6)");
+            r.p ("lockhold1") = 1.0f; r.run (60);
+            r.pulse ("rotatepress"); r.run (50);
+            check (r.e->freqblock == (1u << 5) && r.e->num_freq_blocked == 1 && r.ap.triggerEdges (6) == 2, "Lock 1 held + Rotate press forbids the note channel 1 is on (note 5)");
+            r.p ("lockhold1") = 0.0f; r.run (60);
+            check (r.e->lock[0] == 0, "releasing the Lock after forbidding a note does not lock the channel");
+            r.p ("lockhold1") = 1.0f; r.run (60);
+            r.p ("rotatepress") = 1.0f; r.run (2000);   // held on: one press, not a stream
+            r.p ("rotatepress") = 0.0f; r.run (10);
+            check (r.e->freqblock == 0 && r.e->num_freq_blocked == 0 && r.ap.triggerEdges (6) == 3 && r.ap.triggerReleases (6) == 3,
+                   "a Rotate press held on fires once (rising edge) and allows the note again");
+        }
+        {   // all six Locks held + press: clear all
+            Rig r;
+            r.start(); r.run (50);
+            r.e->setFreqBlock (0b110011);
+            const char* holds[6] = { "lockhold1", "lockhold2", "lockhold3", "lockhold4", "lockhold5", "lockhold6" };
+            for (const char* h : holds) r.p (h) = 1.0f;
+            r.run (60);
+            r.pulse ("rotatepress"); r.run (50);
+            check (r.e->freqblock == 0 && r.e->num_freq_blocked == 0, "six Locks held + Rotate press clears every forbidden note");
+            for (const char* h : holds) r.p (h) = 0.0f;
+            r.run (60);
+            check (r.e->lock[0] == 0 && r.e->lock[1] == 0 && r.e->lock[2] == 0 && r.e->lock[3] == 0 && r.e->lock[4] == 0 && r.e->lock[5] == 0,
+                   "after the clear, releasing the six Locks locks none of them");
+        }
+        {   // a project saved with the press parameter on must not fire it at load
+            Rig r;
+            r.p ("lockhold1") = 1.0f;
+            r.p ("rotatepress") = 1.0f;
+            r.start(); r.run (60);
+            check (r.e->freqblock == 0 && r.ap.triggerEdges (6) == 0, "a Rotate press parameter that is on at start does not fire (initial apply only remembers it)");
         }
 
         // Bank applies to unlocked channels only (process_rotary_button release branch).

@@ -68,6 +68,9 @@ static void emitState (Trace& t, const smr::Engine& e)
     v.coarseAdj = e.coarse_adj;
     v.coarseAdjLed = e.coarse_adj_led;
     v.numClearStaged = e.num_clear_coarse_staged;
+    v.freqblock = e.freqblock;
+    v.numFreqBlocked = e.num_freq_blocked;
+    v.handledRelease = e.already_handled_lock_release;
     emit (t, v);
 }
 
@@ -99,12 +102,15 @@ static int runTrace (const char* stimPath, const char* outPath)
                 e->lock[k] = (s.lock_mask >> k) & 1;
                 e->q_locked[k] = (s.q_locked_mask >> k) & 1;
             }
-            e->lock_pressed[k] = (s.lock_pressed_mask >> k) & 1;
-            e->lock_down[k] = s.lock_down_big ? 40000u : 0u;
+            if (! (s.events & 64))   // bit 6: the Lock button pins drive lock_pressed[] and lock_down[] (Milestone 7 step 4)
+            {
+                e->lock_pressed[k] = (s.lock_pressed_mask >> k) & 1;
+                e->lock_down[k] = s.lock_down_big ? 40000u : 0u;
+            }
         }
         if (s.lock_down_near)
             for (int k = 0; k < 6; ++k) e->lock_down[k] = 49990u;
-        e->freqblock = s.freqblock;
+        if (! (s.events & 32)) e->freqblock = s.freqblock;
 
         for (int k = 0; k < 6; ++k) e->setLockButton (k, (s.lock_button_mask >> k) & 1);
         e->setControls (controlsOf (s));
@@ -112,6 +118,7 @@ static int runTrace (const char* stimPath, const char* outPath)
         if (s.events & 2) e->triggerRotateDown();
         if (s.events & 4) e->triggerLock135();
         if (s.events & 8) e->triggerLock246();
+        if (s.events & 16) e->triggerRotaryPress();
 
         e->processAudioOnly (s.inL, s.inR, outA, outB);
 
