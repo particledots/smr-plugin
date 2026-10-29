@@ -301,7 +301,7 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - **Step 3b accepted on the Intel Mac (Bryn, 2026-10-28).** Source cross-check: `params.c process_lock_buttons` (called from the main loop, `main.c` line 156) counts `lock_down[]` in main-loop passes, so the 36000-pass clear model holds; `leds.c update_lock_leds` flashes on every fifth update (`flash2`), as `DisplayModel.h lockLedUpdate` does.
 - Not confirmed: (1) both Nudge knobs at once (1.22 s): a mouse cannot move two knobs, the core logic is covered by V1 scenario 8 (bit for bit), the window path (`PluginEditor.cpp updateDisplay`) is untested; (2) staged-clear time on the real SMR (M1-c, M2-c): Bryn will measure later (three runs, stopwatch from the last of the six Lock presses to the first amber flash); plugin runs of 4.80 s and 4.03 s are hand timing and cannot separate reaction time from the model; (3) the M4 mac mini for this build.
 
-## Milestone 7, step 4: forbidden notes (started 2026-10-28; code written, NOT built by CI yet, NOT tested by Bryn)
+## Milestone 7, step 4: forbidden notes (started 2026-10-28; built by CI, ACCEPTED on the Intel Mac 2026-10-29; M4 mac mini NOT tested)
 
 - Scope (Bryn, step 1): in = forbidden notes. Read first: `params.c process_freq_blocks` (`main.c` line 158), `params.c process_rotary_button` (only the `rotary_switch_b` pulse is used), `led_ring.c update_LED_ring` (grey light), `system_mode.c load_params_from_sram` (the count), manual "Forbidden Notes" printed page 16. Details and the manual-versus-source comparison: docs/open-questions.md M7-k (no disagreement found for the press; storage is still M1-h).
 - Core: `Engine.cpp process_freq_blocks` (new, port of the PLAY branch), `Engine::triggerRotaryPress()`, members `num_freq_blocked` and `rotary_switch_b`; `runLoopPass` calls `process_freq_blocks()` right after `process_lock_buttons()` and clears the pulse; `setFreqBlock` and `Snapshot.cpp loadSnapshot` keep `num_freq_blocked` in step with `freqblock`. Not ported: the rest of `process_rotary_button` (docs/port-notes.md).
@@ -312,3 +312,14 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - **CI result (build run 40829856814, commit bccc09d; all three jobs success: core-macos, build-macos, oracle-linux; 2026-10-28):** plugin builds as AU and VST3, universal, minos 12.0 on both slices; `auval` exit 0; `smr_core_tests` 102 and `smr_param_tests` 117 checks, 0 failed on linux, arm64 and x86-64; fixed-render hash fee74c946b3031c0 identical on arm64 and x86-64 (V4); `smr_plugin_tests selftest` on arm64 83 checks, 0 failed, including the three new rotate press checks; V1 scenarios 0 to 9 identical (197 words per step; scenario 7 up to its first saturation, as before), V1a tables identical, V1 negative control detects a change. Not confirmed: how the button and the grey lights look and behave on a real Mac, the x86_64 (Rosetta) plugin check count. The Capture analysis (Milestone 3) run was still in progress when this was written.
 - Still open from step 3b: the M4 mac mini has not tested any M6/M7 build; M1-c and M2-c (real SMR timing, Bryn will measure later); the both-knob 1.22 s window path.
 
+### Milestone 7 step 4 test (Bryn, **Intel Mac**, build run 40829856814, commit bccc09d, 2026-10-29; the M4 mac mini has not tested this build)
+- Section 1: a held Lock (shift-click) shows white with a flashing black inner ring (this is the plugin-only held indicator, `SmrUi.h drawToggleButton`, `stickyFlash`); "Rotate press" turned the blue light grey; releasing left Lock 1 dark; 20 clicks of Rotate trig (right): channel 1 never landed on the grey position.
+- Section 2 (undo): the second press brought the blue light back; Lock 1 stayed dark on release.
+- Section 3 (no Lock held): nothing changed.
+- Section 4 (Locks 2 and 3): two grey lights, channel 1 unchanged; both Locks stayed dark on release.
+- Section 5 (clear all): every grey light went; none of the six Locks lit on release.
+- Section 6 (limit): round 1: 5 grey lights; round 3: 14 grey lights (15th refused). The round 2 count (expected 10) was not reported.
+- Section 7: "Rot press" sent/seen 18/18, equal.
+- Section 8: after save, close and reopen, the grey light is still there. Expected from the plugin's design (M7-k, M1-h); not a bug. Whether the SMR should forget forbidden notes at power-off stays Bryn's decision (M1-h).
+- Section 9: "Rotate Press (trigger)" is in the Logic parameter list.
+- **Step 4 accepted on the Intel Mac.** Not confirmed: the M4 mac mini (no M6/M7 build tested there yet); M1-c and M2-c (real SMR staged-clear timing, Bryn will measure later); the both-knob 1.22 s window path; forbidden-notes storage (M7-k, M1-h).
