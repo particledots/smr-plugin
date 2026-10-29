@@ -72,3 +72,5 @@ Nothing here is confirmed until the CI annotations say so; see `docs/status.md`.
   at 3700 in two-pass scenarios (P-5); banks stay 0..19; scenarios 4 and 7 saturate and are compared up to that block.
 
 - P-10: one-pass BpRe selected while a channel is on bank 19 and the previous pointers were MAXQ: out-of-range table read in `filter.c`. See docs/open-questions.md P-10.
+- P-11 (Milestone 7, step 5): `Engine::readSwitchesNow()` (src/core/Engine.h) runs `param_read_switches()` alone. It is not a firmware function. The plugin uses it so that a jump of the Fast | Trigger | Slow | 1V/oct switch between Fast and 1V/oct passes through Trigger, as a physical switch must (`ParamApplier::apply`, docs/open-questions.md M7-l). The firmware code is unchanged.
+

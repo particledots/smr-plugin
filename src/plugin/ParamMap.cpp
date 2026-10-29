@@ -14,7 +14,7 @@ namespace smr_plugin
         const char* const kOddsModes[]   = { "135 (all odd channels)", "1 (channel 1 only)" };
         const char* const kEvensModes[]  = { "246 (all even channels)", "6 (channel 6 only)" };
         const char* const kPrePost[]     = { "Post", "Pre" };
-        const char* const kEnvSpeed[]    = { "Fast", "Trigger", "Slow" };
+        const char* const kEnvSpeed[]    = { "Fast", "Trigger", "Slow", "1V/oct" };   // index 3 is plugin only: Fast with ROTATE held (Milestone 7, step 5)
         const char* const kFilterMode[]  = { "Two-Pass", "One-Pass" };
         const char* const kFilterType[]  = { "MAXQ", "BpRe" };
         // Colour groups from the manual ("Bank colours", v5): blue 6, pink 3, orange 4, green 6, white 1 = 20 banks,
@@ -53,7 +53,7 @@ namespace smr_plugin
             C ("oddsmode", "135 | 1 Switch", OddsMode, kOddsModes, 0.0f),
             C ("evensmode", "246 | 6 Switch", EvensMode, kEvensModes, 0.0f),
             C ("prepost", "Pre | Post Switch", PrePost, kPrePost, 0.0f),
-            C ("envspeed", "Fast | Trigger | Slow Switch", EnvSpeed, kEnvSpeed, 2.0f),
+            C ("envspeed", "Fast | Trigger | Slow | 1V/oct Switch", EnvSpeed, kEnvSpeed, 2.0f),
             B ("slew", "CV Slew", Slew, 0, 0.0f),
             B ("scalerotation", "Scale Rotation", ScaleRotation, 0, 0.0f),
             B ("rotatecw", "Rotate Clockwise (trigger)", RotateCw, 0, 0.0f),
@@ -204,15 +204,17 @@ namespace smr_plugin
                 case Role::EvensMode:   c.mod246_six = choiceIndex (v, i) == 1; break;
                 case Role::PrePost:     c.env_mode_pre = choiceIndex (v, i) == 1; break;
                 case Role::EnvSpeed:
-                    c.env_speed_fast = choiceIndex (v, i) == 0;
+                    // Index 3 (1V/oct) is "ROTATE held while the switch is at Fast": params.c param_read_switches reads ROTARY_SW
+                    // only at the moment the switch arrives at Fast.
+                    c.env_speed_fast = choiceIndex (v, i) == 0 || choiceIndex (v, i) == 3;
                     c.env_speed_slow = choiceIndex (v, i) == 2;
+                    c.rotary_sw      = choiceIndex (v, i) == 3;
                     break;
                 case Role::Slew:          c.cvlag = isOn (v, i); break;
                 case Role::ScaleRotation: c.range_mode = isOn (v, i); break;
                 default: break;
             }
         }
-        c.rotary_sw = false;
         return c;
     }
 
@@ -232,6 +234,24 @@ namespace smr_plugin
 
     void ParamApplier::apply (smr::Engine& e, const float* v, bool initial)
     {
+        // Fast <-> 1V/oct. The firmware (params.c param_read_switches) enters or leaves ENV_VOLTOCT only from a state other than
+        // ENV_FAST / ENV_VOLTOCT, and a physical switch cannot go from one end to the other without passing the centre. So when the
+        // host jumps between the two, the core first sees the Trigger position (one evaluation of the switches), then the target.
+        // Plugin glue only: the core's firmware logic is untouched (docs/open-questions.md M7-l).
+        if (! initial)
+        {
+            static const int envIndex = indexOfId ("envspeed");
+            const int was = choiceIndex (prev_, envIndex), now = choiceIndex (v, envIndex);
+            if ((was == 0 && now == 3) || (was == 3 && now == 0))
+            {
+                float t[kNumParams];
+                std::memcpy (t, v, sizeof t);
+                t[envIndex] = 1.0f;   // Trigger
+                e.setControls (buildControls (t));
+                e.readSwitchesNow();
+            }
+        }
+
         e.setControls (buildControls (v));
 
         for (int i = 0; i < kNumParams; ++i)

@@ -71,10 +71,10 @@ jobs:
             echo "$out"; echo "::error::V1a tables FAIL: $out"; exit 1
           fi
 
-      - name: V1 differential test (10 scenarios x 30000 blocks, bit for bit)
+      - name: V1 differential test (11 scenarios x 30000 blocks, bit for bit)
         run: |
           bad=0
-          for i in 0 1 2 3 4 5 6 7 8 9; do
+          for i in 0 1 2 3 4 5 6 7 8 9 10; do
             ./build_linux/gen_stimulus $i 30000 stim_$i.bin || { echo "::error::V1 scenario $i: gen_stimulus failed"; bad=1; continue; }
             ./oracle_driver trace stim_$i.bin oracle_$i.trace || { echo "::error::V1 scenario $i: oracle_driver failed"; bad=1; continue; }
             pout=$(./build_linux/port_driver trace stim_$i.bin port_$i.trace) || { echo "::error::V1 scenario $i: port_driver failed"; bad=1; continue; }
@@ -84,6 +84,15 @@ jobs:
             if [ "$valid" -lt 500 ]; then echo "::error::V1 scenario $i: only $valid valid steps before the first saturation ($pout)"; bad=1; continue; fi
             if out=$(./build_linux/trace_diff oracle_$i.trace port_$i.trace $valid); then
               echo "::notice::V1 scenario $i PASS: $out ($pout)"
+              if [ "$i" = "10" ]; then
+                # Milestone 7 step 5: scenario 10 must really exercise the 1V/oct mode (entries, glissando, Fast with ROTARY_SW that does not enter)
+                ve=$(echo "$pout" | grep -o 'voltoct_enter=[0-9]*' | cut -d= -f2); vg=$(echo "$pout" | grep -o 'voltoct_pre_morph_steps=[0-9]*' | cut -d= -f2); vn=$(echo "$pout" | grep -o 'fast_rotary_no_entry=[0-9]*' | cut -d= -f2)
+                if [ "${ve:-0}" -lt 20 ] || [ "${vg:-0}" -lt 1000 ] || [ "${vn:-0}" -lt 100 ]; then
+                  echo "::error::V1 scenario 10 coverage too low: voltoct_enter=${ve:-?} (need 20), voltoct_pre_morph_steps=${vg:-?} (need 1000), fast_rotary_no_entry=${vn:-?} (need 100)"; bad=1
+                else
+                  echo "::notice::V1 scenario 10 coverage ok: voltoct_enter=$ve voltoct_pre_morph_steps=$vg fast_rotary_no_entry=$vn"
+                fi
+              fi
             else
               echo "::error::V1 scenario $i FAIL: $out ($pout)"; bad=1
             fi

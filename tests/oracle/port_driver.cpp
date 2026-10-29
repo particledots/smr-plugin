@@ -89,6 +89,11 @@ static int runTrace (const char* stimPath, const char* outPath)
     // saturation, the x86 oracle converts overflow to INT_MIN. valid_steps counts the steps before that block.
     uint32_t validSteps = 0;
     bool saturated = false;
+    // Coverage of the 1V/oct mode (Milestone 7 step 5), counted on the port (the trace comparison makes the oracle's the same):
+    // steps in ENV_VOLTOCT, entries and exits, steps in ENV_VOLTOCT with Pre and a channel morphing (glissando, filter.c), and
+    // steps where Fast with ROTARY_SW held did not enter it (the switch stayed on Fast with ROTATE pressed or released).
+    uint32_t vSteps = 0, vEnter = 0, vLeave = 0, vPreMorph = 0, fastRotNoEntry = 0, vOnePass = 0;
+    smr::EnvOutMode prevMode = e->env_track_mode;
     for (const Step& s : steps)
     {
         if (s.set_filter_mode) e->setFilterMode ((smr::FilterMode) s.set_filter_mode);
@@ -128,11 +133,27 @@ static int runTrace (const char* stimPath, const char* outPath)
 
         if (e->saturation_count != 0) saturated = true;
         if (! saturated) ++validSteps;
+        if (! saturated)   // coverage counts only the steps that the comparison covers
+        {
+            const smr::EnvOutMode m = e->env_track_mode;
+            if (m == smr::ENV_VOLTOCT)
+            {
+                ++vSteps;
+                if (e->filter_mode == smr::ONEPASS) ++vOnePass;   // filter.c sets ENVOUT_preload = c1 in the TWOPASS branch only
+                if (e->env_prepost_mode == smr::PRE)
+                    for (int k = 0; k < 6; ++k) if (e->motion_morphpos[k] > 0.0f) { ++vPreMorph; break; }
+            }
+            if (m == smr::ENV_VOLTOCT && prevMode != smr::ENV_VOLTOCT) ++vEnter;
+            if (m != smr::ENV_VOLTOCT && prevMode == smr::ENV_VOLTOCT) ++vLeave;
+            if ((s.sw & 16) && (s.sw & 64) && m == smr::ENV_FAST && prevMode == smr::ENV_FAST) ++fastRotNoEntry;
+        }
+        prevMode = e->env_track_mode;
         tr.beginStep();
         emitState (tr, *e);
         tr.endStep();
     }
-    std::printf ("saturation_count=%llu loop_guard_trips=%llu valid_steps=%u\n", (unsigned long long) e->saturation_count, (unsigned long long) e->loop_guard_trips, validSteps);
+    std::printf ("saturation_count=%llu loop_guard_trips=%llu voltoct_steps=%u voltoct_enter=%u voltoct_leave=%u voltoct_pre_morph_steps=%u voltoct_onepass_steps=%u fast_rotary_no_entry=%u valid_steps=%u\n",
+                 (unsigned long long) e->saturation_count, (unsigned long long) e->loop_guard_trips, vSteps, vEnter, vLeave, vPreMorph, vOnePass, fastRotNoEntry, validSteps);
     return tr.write (outPath) ? 0 : 2;
 }
 

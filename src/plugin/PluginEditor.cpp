@@ -69,7 +69,7 @@ public:
         sw (slewSwitch,   "slew",          2, false, 91, 367, 52);
         sw (scaleRotSwitch, "scalerotation", 2, false, 91, 429, 52);
         sw (prePostSwitch, "prepost",      2, true,  909, 367, 52);    // parameter index 0 is Post, drawn on the right
-        sw (envSwitch,    "envspeed",      3, false, 909, 429, 78);
+        sw (envSwitch,    "envspeed",      4, false, 909, 429, 104);   // the fourth position, 1V/oct, is plugin only (Milestone 7, step 5)
 
         // Rotate: the two trigger buttons and the centre knob.
         rotCcw = std::make_unique<smrui::PulseButton> ("Rotate trig", *apvts.getParameter ("rotateccw"), 1, false, linkFor (p, 1));
@@ -272,7 +272,7 @@ public:
         label (g, "CV slew", 91.0f, 387.0f, 120.0f);
         label (g, "Scale rotation", 91.0f, 456.0f, 130.0f);
         label (g, "Pre " + dot + " Post", 909.0f, 387.0f, 120.0f);
-        label (g, "Fast " + dot + " Trigger " + dot + " Slow", 909.0f, 456.0f, 150.0f);
+        label (g, "Fast " + dot + " Trig " + dot + " Slow " + dot + " 1V/oct", 905.0f, 456.0f, 180.0f);
         label (g, "Res (Q)", 106.0f, 770.0f, 100.0f);
         label (g, "Morph", 860.0f, 765.0f, 80.0f);
         label (g, "Spread", 941.0f, 765.0f, 80.0f);
@@ -284,6 +284,10 @@ public:
         g.setColour (smrui::edge());
         for (auto* c : { &filterMode, &filterType, &bank })
             smrui::dashedRoundedRect (g, c->getBounds().toFloat().reduced (1.0f), 6.0f);
+        {   // the 1V/oct position of the env switch is not on the module: dashed around its quarter of the switch
+            auto b = envSwitch->getBounds().toFloat();
+            smrui::dashedRoundedRect (g, b.removeFromRight (b.getWidth() * 0.25f).reduced (1.0f), 6.0f);
+        }
         g.setColour (smrui::softInk());
         g.setFont (13.0f);
         g.drawText ("dashed outline = plugin only", juce::Rectangle<float> (645.0f, 760.0f, 190.0f, 24.0f), juce::Justification::centredLeft, false);

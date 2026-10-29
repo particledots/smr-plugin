@@ -279,6 +279,13 @@ namespace smr
         // With no Lock held the press does nothing in the core.
         void triggerRotaryPress() noexcept { rotary_switch_b = 1; }
 
+        // Host-side switch evaluation (Milestone 7, step 5). Runs params.c param_read_switches() now, on the controls last given to
+        // setControls(), instead of at the next main-loop pass. Nothing else of the main loop runs. The plugin uses it when the host
+        // moves the Fast | Trigger | Slow | 1V/oct switch between Fast and 1V/oct: param_read_switches() only enters or leaves
+        // ENV_VOLTOCT from a state other than ENV_FAST / ENV_VOLTOCT, and a physical switch has to pass through its centre
+        // (Trigger) to get from one end to the other (docs/open-questions.md M7-l).
+        void readSwitchesNow() { param_read_switches(); }
+
         // Plain inputs. Out-of-range channel numbers are ignored.
         // setLockButton: the Lock button pin. The main loop's process_lock_buttons() (Milestone 7) turns presses into lock_pressed[],
         // lock[] and q_locked[] exactly as the firmware does. setLock, setLockPressed and setLockDown write the state directly (tests).

@@ -1,5 +1,5 @@
 // Writes the stimulus files for the differential test. Deterministic (fixed seeds); no input files.
-//   gen_stimulus <scenario 0..9> <steps> <out>
+//   gen_stimulus <scenario 0..10> <steps> <out>
 // Scenarios (docs/architecture.md section 14, V1): every scenario uses a different mix of filter mode and
 // type, bank changes, Q, morph, rotation, spread, scale CV, levels, locks and tick schedules.
 #include <cmath>
@@ -38,7 +38,7 @@ namespace
 
 int main (int argc, char** argv)
 {
-    if (argc < 4) { std::printf ("usage: gen_stimulus <scenario 0..9> <steps> <out>\n"); return 2; }
+    if (argc < 4) { std::printf ("usage: gen_stimulus <scenario 0..10> <steps> <out>\n"); return 2; }
     const int scenario = std::atoi (argv[1]);
     const int n = std::atoi (argv[2]);
     Rng r (0x1234567u + (uint32_t) scenario * 7919u);
@@ -50,7 +50,7 @@ int main (int argc, char** argv)
 
     // scenario table: filter mode (2 TWOPASS, 3 ONEPASS), type (1 MAXQ, 0 BPRE), walker speed, bank interval, event rate (one in N steps)
     struct Sc { int mode, type, speed, bankEvery, eventOneIn, amp; bool randomTicks, extremes, switching; };
-    static const Sc table[10] = {
+    static const Sc table[11] = {
         /* 0 */ { 2, 1,  6, 400,  900, 1 << 18, false, false, false },   // two-pass MAXQ, slow controls
         /* 1 */ { 2, 1, 60, 300,  120, 1 << 18, false, false, false },   // two-pass MAXQ, fast controls, many events
         /* 2 */ { 3, 1, 12, 350,  300, 1 << 26, false, false, false },   // one-pass MAXQ
@@ -61,8 +61,9 @@ int main (int argc, char** argv)
         /* 7 */ { 2, 1, 300, 250, 100, 1 << 18, false, true,  true  },  // two-pass, extreme control jumps, switching
         /* 8 */ { 2, 1,  6, 400,  900, 1 << 18, false, false, false },  // like 0, but the Freq Nudge controls move in short windows only (Milestone 7 step 3b)
         /* 9 */ { 2, 1,  6, 400,   60, 1 << 18, false, false, false },  // like 0 with many Rotate events; forbidden notes by Lock pins and ROTATE press pulses (Milestone 7 step 4)
+        /* 10 */ { 2, 1,  6, 400,   60, 1 << 18, false, false, false },  // like 9 without the Lock pins; the Fast | Slow pins, ROTARY_SW and Pre | Post follow a schedule (Milestone 7 step 5)
     };
-    if (scenario < 0 || scenario > 9) { std::printf ("FAIL: scenario out of range\n"); return 2; }
+    if (scenario < 0 || scenario > 10) { std::printf ("FAIL: scenario out of range\n"); return 2; }
     const Sc sc = table[scenario];
     // Scenario 8 (Milestone 7 step 3b): the display timers of params.c param_read_freq (DISPLAYTIME_NUDGEONESIDE 12000 and
     // DISPLAYTIME_NUDGEBOTHSIDES 25000 TIM10 ticks, about 3.4 per step) only expire when nothing touches the Nudge knobs, the Lock
@@ -75,6 +76,16 @@ int main (int argc, char** argv)
     // process_lock_buttons (events bit 6), and freqblock is the firmware's own (events bit 5), so blocks, unblocks, the 14 limit, clear all
     // and the "release does not toggle the Lock" flag all run for real.
     const bool forb = (scenario == 9);
+    // Scenario 10 (Milestone 7 step 5): 1V/oct outputs. The switch pins ENVSPEEDFAST, ENVSPEEDSLOW, ROTARY_SW (sw bits 4, 5, 6) and ENV_MODE
+    // (bit 0, Pre | Post) are not left to the random flips: a second generator moves them in 60-step phases, like a hand on the module.
+    // Each phase picks the Fast | Trigger | Slow position (Fast five times in ten) and whether ROTATE is held; the position change is
+    // sometimes three steps later than the ROTATE change (ROTATE first, then flip) and sometimes the same step. Half-way through a phase ROTATE
+    // may be pressed or released while the switch stays where it is (params.c param_read_switches reads ROTARY_SW only when the switch
+    // arrives at Fast, so this must change nothing), and Pre | Post may flip (glissando needs Pre; filter.c, ENV_VOLTOCT and PRE).
+    // The pins are never in the impossible state of both Fast and Slow.
+    const bool volt = (scenario == 10);
+    Rng rv (0x1B0A7C71u);
+    int vPos = 2, vPosNew = 2, vPosDelay = 0, vRot = 0, vPre = 0;
     Rng rf (0xF0B1DDE7u);
     uint32_t cycMask = 0;
     bool cycPulseA = false, cycPulseB = false, cycPulseIdle = false;
@@ -125,6 +136,25 @@ int main (int argc, char** argv)
         {
             const uint32_t bit = r.below (8);
             if (! (quiet && (bit == 1 || bit == 2))) sw = (uint8_t) (sw ^ (1u << bit));   // scenario 8 never flips the 246/135 switches
+        }
+        if (volt)
+        {
+            if (i % 60 == 0)
+            {
+                const uint32_t pick = rv.below (10);
+                vPosNew = pick < 5 ? 0 : (pick < 7 ? 1 : 2);
+                vRot = (int) rv.below (2);
+                if (rv.below (2)) vPre ^= 1;
+                vPosDelay = (rv.below (4) == 0) ? 3 : 0;
+                if (vPosDelay == 0) vPos = vPosNew;
+            }
+            else if (vPosDelay > 0 && --vPosDelay == 0) vPos = vPosNew;
+            if (i % 60 == 30)
+            {
+                if (rv.below (2)) vRot ^= 1;
+                if (rv.below (3) == 0) vPre ^= 1;
+            }
+            sw = (uint8_t) ((sw & ~0x71u) | (uint32_t) vPre | (vPos == 0 ? 0x10u : 0u) | (vPos == 2 ? 0x20u : 0u) | (vRot ? 0x40u : 0u));
         }
         s.sw = sw;
 

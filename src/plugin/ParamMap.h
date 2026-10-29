@@ -65,7 +65,7 @@ namespace smr_plugin
     class ParamApplier
     {
     public:
-        // The ADC and switch inputs for these values (Freq parameters included). rotary_sw is always off here.
+        // The ADC and switch inputs for these values (Freq parameters included). rotary_sw is on only for the 1V/oct choice of the Fast | Trigger | Slow | 1V/oct switch.
         static smr::Controls buildControls (const float* values);
 
         // Call once per host block, before audio. Sets the controls on the engine; locks, bank, filter mode and

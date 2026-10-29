@@ -218,7 +218,7 @@ namespace
 
         Rig f;
         f.p ("envspeed") = 0; f.start(); f.run (4);
-        check (f.e->env_track_mode == smr::ENV_FAST, "core: Fast gives ENV_FAST (rotary_sw is never pressed, so never ENV_VOLTOCT)");
+        check (f.e->env_track_mode == smr::ENV_FAST, "core: Fast gives ENV_FAST (rotary_sw is off, so not ENV_VOLTOCT)");
         Rig t;
         t.p ("envspeed") = 1; t.start(); t.run (4);
         check (t.e->env_track_mode == smr::ENV_TRIG, "core: Trigger gives ENV_TRIG");
@@ -232,6 +232,75 @@ namespace
         lag.p ("morph") = 0.5f; lag.p ("slew") = 1.0f; lag.run (4);
         check (lag.e->CHANNEL_LEVEL_LPF != lpfOff && lag.e->CHANNEL_LEVEL_LPF > 0.0f && lag.e->CHANNEL_LEVEL_LPF < 1.0f,
                "core: CV Slew latches a Morph-dependent CHANNEL_LEVEL_LPF", fmt ("%f vs %f", lag.e->CHANNEL_LEVEL_LPF, lpfOff));
+    }
+
+    // Milestone 7, step 5: the fourth choice of the Fast | Trigger | Slow | 1V/oct switch (params.c param_read_switches, ROTARY_SW).
+    void testEnvSpeedVoltOct()
+    {
+        float v[kNumParams];
+        for (int i = 0; i < kNumParams; ++i) v[i] = paramDefault (i);
+        const int ix = indexOfId ("envspeed");
+        check (spec (ix).numChoices == 4 && std::strcmp (spec (ix).choices[3], "1V/oct") == 0, "envspeed has four choices, the last is 1V/oct");
+        check (paramDefault (ix) == 2.0f, "envspeed default is still index 2 (Slow)");
+        const bool wantFast[4] = { true, false, false, true }, wantSlow[4] = { false, false, true, false }, wantRot[4] = { false, false, false, true };
+        for (int k = 0; k < 4; ++k)
+        {
+            v[ix] = (float) k;
+            const smr::Controls c = ParamApplier::buildControls (v);
+            check (c.env_speed_fast == wantFast[k] && c.env_speed_slow == wantSlow[k] && c.rotary_sw == wantRot[k],
+                   "envspeed index gives the switch inputs (fast, slow, rotary_sw)", fmt ("index %.0f", k));
+        }
+
+        // Starting at each position, the core's mode after a few blocks
+        const smr::EnvOutMode wantStart[4] = { smr::ENV_FAST, smr::ENV_TRIG, smr::ENV_SLOW, smr::ENV_VOLTOCT };
+        for (int k = 0; k < 4; ++k)
+        {
+            Rig r;
+            r.p ("envspeed") = (float) k; r.start(); r.run (4);
+            check (r.e->env_track_mode == wantStart[k], "core: env_track_mode when the project opens on this position", fmt ("index %.0f", k));
+        }
+
+        // Moving at run time, from every position to every other one
+        for (int from = 0; from < 4; ++from)
+            for (int to = 0; to < 4; ++to)
+            {
+                if (from == to) continue;
+                Rig r;
+                r.p ("envspeed") = (float) from; r.start(); r.run (4);
+                r.p ("envspeed") = (float) to; r.run (4);
+                check (r.e->env_track_mode == wantStart[to], "core: env_track_mode after moving the switch", fmt ("%.0f -> %.0f", from, to));
+            }
+
+        // Why the bridge exists: the firmware itself ignores a direct Fast -> Fast+ROTARY_SW change (the same for the way back).
+        {
+            Rig r;
+            r.p ("envspeed") = 0; r.start(); r.run (4);
+            r.p ("envspeed") = 3;
+            r.e->setControls (ParamApplier::buildControls (r.v));   // no ParamApplier::apply, so no Trigger step in between
+            int32_t l[16] = {}, rr[16] = {}, oa[16], ob[16];
+            for (int b = 0; b < 8; ++b) r.e->processBlock (l, rr, oa, ob);
+            check (r.e->env_track_mode == smr::ENV_FAST, "firmware: Fast -> Fast with ROTARY_SW does not enter ENV_VOLTOCT (params.c param_read_switches)");
+        }
+        {
+            Rig r;
+            r.p ("envspeed") = 3; r.start(); r.run (4);
+            r.p ("envspeed") = 0;
+            r.e->setControls (ParamApplier::buildControls (r.v));
+            int32_t l[16] = {}, rr[16] = {}, oa[16], ob[16];
+            for (int b = 0; b < 8; ++b) r.e->processBlock (l, rr, oa, ob);
+            check (r.e->env_track_mode == smr::ENV_VOLTOCT, "firmware: Fast with ROTARY_SW -> Fast without it does not leave ENV_VOLTOCT");
+        }
+
+        // The Env Out value in 1V/oct mode is the channel's filter coefficient c1, not an envelope: it is steady and non-zero with no input
+        {
+            Rig r;
+            r.p ("envspeed") = 3; r.start(); r.run (40);
+            bool allPwm = true, allPre = true;
+            for (int j = 0; j < 6; ++j) { allPwm = allPwm && r.e->ENVOUT_PWM[j] > 0; allPre = allPre && r.e->ENVOUT_preload[j] > 0.0f; }
+            check (allPre, "1V/oct: ENVOUT_preload (c1) is positive on all six channels with silent input");
+            check (allPwm, "1V/oct: ENVOUT_PWM is non-zero on all six channels with silent input",
+                   fmt ("%.0f %.0f", (double) r.e->ENVOUT_PWM[0], (double) r.e->ENVOUT_PWM[5]));
+        }
     }
 
     void testControlsReachCore()
@@ -700,6 +769,7 @@ int main()
     testDefaults();
     testUnitMapping();
     testSwitches();
+    testEnvSpeedVoltOct();
     testControlsReachCore();
     testFreq();
     testNudgeSleep();
