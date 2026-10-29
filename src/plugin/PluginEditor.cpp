@@ -272,7 +272,9 @@ public:
         label (g, "CV slew", 91.0f, 387.0f, 120.0f);
         label (g, "Scale rotation", 91.0f, 456.0f, 130.0f);
         label (g, "Pre " + dot + " Post", 909.0f, 387.0f, 120.0f);
-        label (g, "Fast " + dot + " Trig " + dot + " Slow " + dot + " 1V/oct", 905.0f, 456.0f, 180.0f);
+        g.setFont (14.0f);   // smaller and centred under the switch (909): at 16 pt and centre 905 the "t" of 1V/oct touched the panel edge (Bryn, 2026-10-29)
+        label (g, "Fast " + dot + " Trig " + dot + " Slow " + dot + " 1V/oct", 909.0f, 456.0f, 160.0f);
+        g.setFont (16.0f);
         label (g, "Res (Q)", 106.0f, 770.0f, 100.0f);
         label (g, "Morph", 860.0f, 765.0f, 80.0f);
         label (g, "Spread", 941.0f, 765.0f, 80.0f);

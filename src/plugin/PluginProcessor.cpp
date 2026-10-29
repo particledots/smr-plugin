@@ -304,6 +304,10 @@ void SmrAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
         have = (int) eng["version"] == smr_plugin::kStateVersion
                && smr_plugin::decodeSnapshot (eng["data"].toString().toStdString(), snap);
         tree.removeChild (eng, nullptr);
+        // M1-h (Bryn, 2026-10-29): forbidden notes are not kept when a project is loaded, as on the hardware (manual p.16: only in
+        // settings slots). The block is still written by encodeSnapshot (format unchanged); it is dropped here on load.
+        if (have)
+            snap.freqblock = 0;
     }
 
     apvts.replaceState (tree);
