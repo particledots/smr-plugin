@@ -1,7 +1,11 @@
 # Milestone 7, step 4 test: forbidden notes ("Rotate press" button)
 
 Test on the Intel Mac first (macOS 12.7.8, Logic 10.7.8). Tell me when you also test on the M4 mac mini. Play noise or music through the plugin the whole time.
-Install the build whose run number I give you in chat, as in docs/testing-milestone-6a.md section 1.
+Install build run 40829856814 (commit bccc09d):
+1. Quit Logic.
+2. Open https://github.com/particledots/smr-plugin/actions/runs/40829856814 and under Artifacts download Unofficial-SMR-macOS.
+3. Unzip both zips (double-click each), open the Unofficial-SMR folder, and double-click Install-Unofficial-SMR.command. If macOS refuses to open it, right-click it, Open, Open. It asks for your Mac password.
+4. Open Logic, open a project with an audio track playing noise or music, put Unofficial SMR on it.
 After you open the plugin window, wait 10 seconds with audio playing before the first click.
 
 What is new: a button "Rotate press" (dashed outline = plugin only) sits left of the ring, under the left "Rotate trig" button. It is the press of the ROTATE knob. The line under the title now also shows "Rot press" (sent/seen).
