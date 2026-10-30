@@ -1,3 +1,5 @@
+// Derived from the Spectral Multiband Resonator firmware (third_party/SMR, v5.1.1, commit 79bc953).
+// Original authors: Dan Green, Hugo Paris. Copyright (c) 2015 Dan Green. MIT licence: see THIRD-PARTY-LICENSES.txt and licenses/SMR-LICENSE.txt.
 // The SMR firmware DSP and the control logic that feeds it, ported from third_party/SMR (v5.1.1, 79bc953).
 //
 // One Engine is one module. All state that the firmware keeps in globals or function-local statics

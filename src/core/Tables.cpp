@@ -1,3 +1,5 @@
+// Derived from the Spectral Multiband Resonator firmware (third_party/SMR, v5.1.1, commit 79bc953).
+// Original authors: Dan Green, Hugo Paris. Copyright (c) 2015 Dan Green. MIT licence: see THIRD-PARTY-LICENSES.txt and licenses/SMR-LICENSE.txt.
 // Includes the upstream table headers verbatim (no copies, no edits) inside a namespace, then
 // copies them into flat core-owned arrays. See docs/architecture.md section 13.2.
 #include "Tables.h"

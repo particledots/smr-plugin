@@ -1,3 +1,5 @@
+// Derived from the Spectral Multiband Resonator firmware (third_party/SMR, v5.1.1, commit 79bc953).
+// Original authors: Dan Green, Hugo Paris. Copyright (c) 2015 Dan Green. MIT licence: see THIRD-PARTY-LICENSES.txt and licenses/SMR-LICENSE.txt.
 // Engine lifecycle, scheduling and the main-loop pass. See Engine.h.
 #include "Engine.h"
 

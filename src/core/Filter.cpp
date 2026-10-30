@@ -1,3 +1,5 @@
+// Derived from the Spectral Multiband Resonator firmware (third_party/SMR, v5.1.1, commit 79bc953).
+// Original authors: Dan Green, Hugo Paris. Copyright (c) 2015 Dan Green. MIT licence: see THIRD-PARTY-LICENSES.txt and licenses/SMR-LICENSE.txt.
 // Port of third_party/SMR/filter.c: process_audio_block() and change_filter_type().
 // Statement order, operand order and float/int conversions follow the C source. Differences are
 // listed in docs/port-notes.md. Every floating-point literal carries an f suffix (the firmware is

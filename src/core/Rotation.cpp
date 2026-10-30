@@ -1,3 +1,5 @@
+// Derived from the Spectral Multiband Resonator firmware (third_party/SMR, v5.1.1, commit 79bc953).
+// Original authors: Dan Green, Hugo Paris. Copyright (c) 2015 Dan Green. MIT licence: see THIRD-PARTY-LICENSES.txt and licenses/SMR-LICENSE.txt.
 // Port of third_party/SMR/rotation.c. Statement order and integer types follow the C source.
 // The only additions are the search-loop guards (docs/port-notes.md item P-7): every unbounded
 // `while (!is_distinct)` in the C gets a counter that gives up after a full cycle of the 20 filter

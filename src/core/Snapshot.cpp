@@ -1,3 +1,5 @@
+// Derived from the Spectral Multiband Resonator firmware (third_party/SMR, v5.1.1, commit 79bc953).
+// Original authors: Dan Green, Hugo Paris. Copyright (c) 2015 Dan Green. MIT licence: see THIRD-PARTY-LICENSES.txt and licenses/SMR-LICENSE.txt.
 // Parameter bank save and load, lock and bank helpers (Milestone 4).
 // Source: third_party/SMR system_mode.c store_params_into_sram() / load_params_from_sram(), params.c
 // process_lock_buttons() (release branch) and process_rotary_button() (release branch). See docs/open-questions.md M4-b.

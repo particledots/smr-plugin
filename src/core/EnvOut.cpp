@@ -1,3 +1,5 @@
+// Derived from the Spectral Multiband Resonator firmware (third_party/SMR, v5.1.1, commit 79bc953).
+// Original authors: Dan Green. Copyright (c) 2015 Dan Green. MIT licence: see THIRD-PARTY-LICENSES.txt and licenses/SMR-LICENSE.txt.
 // Port of third_party/SMR/envout_pwm.c: update_ENVOUT_PWM() and FreqCoef_to_PWMval().
 // The hardware timer register writes (TIM3->CCRx, TIM1->CCRx) are replaced by the ENVOUT_PWM[] array itself,
 // which the host reads. Every floating-point literal carries an f suffix (-fsingle-precision-constant).

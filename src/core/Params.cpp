@@ -1,3 +1,5 @@
+// Derived from the Spectral Multiband Resonator firmware (third_party/SMR, v5.1.1, commit 79bc953).
+// Original authors: Dan Green, Hugo Paris. Copyright (c) 2015 Dan Green. MIT licence: see THIRD-PARTY-LICENSES.txt and licenses/SMR-LICENSE.txt.
 // Port of the DSP-relevant parts of third_party/SMR/params.c: param_read_freq, param_read_q,
 // param_read_switches, read_spread, process_rotateCV, process_scaleCV.
 // Milestone 7 step 3b: the display-only state of param_read_freq (ongoing_fine_tuning, ongoing_coarse_tuning,
