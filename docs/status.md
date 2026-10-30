@@ -408,3 +408,10 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - **Conclusion (measured, not proven for every cause):** the restart after a state load is not the source of the slow blocks in this run. What does cause the occasional 1 to 7 ms blocks in the other group is still not known; they are isolated single blocks, and a shared CI runner is one candidate. Not investigated further because nothing user-visible depends on it yet; Bryn's own CPU reading in normal use is still the check that matters. No behaviour changed.
 - **Decision (Bryn, 2026-10-29):** the "triggers sent/seen" line stays in the window.
 - Still waiting on Bryn: output mapping (M1-m, M3-a), see docs/open-questions.md.
+
+## Milestone 8, step 2 (b): auval is a hard gate (2026-10-30; built by CI; no test needed from Bryn)
+- Change: `.github/workflows/build.yml`, step "auval (hard gate - a non-zero exit fails the build)": `continue-on-error` removed, the step now ends with `exit $code`, a failure writes `::error::` annotations with the tail and the FAIL/ERROR lines of the auval log.
+- First attempt (run 41010153041, commit 80d5bb0) failed to start: my step name contained a colon and space, which is invalid YAML. Fixed in 164864d.
+- **CI result (build run 41011091121, commit 164864d; core-macos, build-macos, oracle-linux all success; 2026-10-30):** the auval step passed (exit 0, "AU VALIDATION SUCCEEDED" in the notice).
+- **Not tested:** that a failing auval really fails the build. Only the passing path has run; the failing path was not forced.
+- Decision recorded (Bryn, 2026-10-29): output mapping M1-m and M3-a follows the source (docs/open-questions.md). Unchanged port.
