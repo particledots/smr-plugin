@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -892,6 +893,199 @@ namespace
         proc->releaseResources();
     }
 
+    // ------------------------------------------------------------------------------------------------------------
+    // Milestone 8: stress test through the real processor (JUCE parameters, saved state, resampler, denormal flush).
+    // Random control moves on every parameter (including 0, 1 and the triggers), random input (noise, full scale, over range,
+    // square, DC, silence), host rates, mono and stereo layouts, fixed and random block sizes, and a state save and load while
+    // running. It checks that the output stays finite and below a sanity ceiling (4.0, a test choice, not a firmware figure).
+    // Timing is wall clock on the machine that runs the test (the CI runner, not Bryn's Macs).
+    struct Rng
+    {
+        uint32_t s;
+        explicit Rng (uint32_t seed) : s (seed ? seed : 1u) {}
+        uint32_t next() { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return s; }
+        float unit() { return (float) (next() >> 8) * (1.0f / 16777216.0f); }
+        int range (int n) { return (int) (next() % (uint32_t) n); }
+    };
+
+    struct StressResult
+    {
+        bool rateOk = true;
+        size_t nonFinite = 0;
+        double peak = 0.0;
+        double wallSeconds = 0.0, audioSeconds = 0.0;
+        double worstBlockRatio = 0.0;   // worst (time to process a block) / (length of that block), blocks of 64 samples or more
+        int stateSaves = 0, stateLoads = 0;
+    };
+
+    // blockMode 0: blocks of 64. 1: blocks of 512. 2: random block length 1..2048 on every block.
+    StressResult stressRun (int rate, int nIn, int nOut, int blockMode, uint32_t seed)
+    {
+        const int maxBlock = 2048;
+        StressResult r;
+        TestProc p;
+        setLayout (p, nIn, nOut);
+        p.setRateAndBufferSizeDetails ((double) rate, maxBlock);
+        p.prepareToPlay ((double) rate, maxBlock);
+        r.rateOk = p.status().rateSupported;
+        if (! r.rateOk) return r;
+
+        Rng rng (seed);
+        Noise noise (seed * 7u + 3u);
+        const int nCh = std::max (nIn, nOut);
+        juce::AudioBuffer<float> storage (nCh, maxBlock);
+        juce::MidiBuffer midi;
+        auto& params = p.getParameters();
+        const int nParams = params.size();
+        juce::MemoryBlock saved;
+        bool haveSaved = false;
+        int blockNo = 0, mode = 0;
+        size_t segLeft = 0, sqCount = 0;
+        const size_t total = (size_t) rate * 3;   // 3 s of audio per run
+        size_t done = 0;
+
+        while (done < total)
+        {
+            int n = blockMode == 0 ? 64 : blockMode == 1 ? 512 : 1 + rng.range (maxBlock);
+            n = (int) std::min ((size_t) n, total - done);
+            ++blockNo;
+
+            // Control moves: some blocks change 1 to 6 random parameters to 0, 1 or a random value; now and then all of them.
+            if (rng.range (100) < 30)
+            {
+                const int k = 1 + rng.range (6);
+                for (int i = 0; i < k; ++i)
+                {
+                    const int pick = rng.range (4);
+                    params[rng.range (nParams)]->setValueNotifyingHost (pick == 0 ? 0.0f : pick == 1 ? 1.0f : rng.unit());
+                }
+            }
+            if (rng.range (1000) < 5)
+                for (int i = 0; i < nParams; ++i) params[i]->setValueNotifyingHost (rng.unit());
+
+            // Saved state while running.
+            if (blockNo % 40 == 0) { saved.setSize (0); p.getStateInformation (saved); haveSaved = true; ++r.stateSaves; }
+            if (blockNo % 97 == 0 && haveSaved) { p.setStateInformation (saved.getData(), (int) saved.getSize()); ++r.stateLoads; }
+
+            // Input: a new kind of signal about every quarter second.
+            if (segLeft == 0) { mode = rng.range (6); segLeft = (size_t) rate / 4; }
+            segLeft -= std::min (segLeft, (size_t) n);
+            juce::AudioBuffer<float> view (storage.getArrayOfWritePointers(), nCh, 0, n);
+            for (int c = 0; c < nCh; ++c)
+            {
+                float* d = view.getWritePointer (c);
+                for (int k = 0; k < n; ++k)
+                {
+                    float x = 0.0f;
+                    switch (mode)
+                    {
+                        case 0: x = 0.1f * noise.next(); break;        // quiet noise
+                        case 1: x = noise.next(); break;               // full-scale noise
+                        case 2: x = 50.0f * noise.next(); break;       // far over range
+                        case 3: x = ((sqCount + (size_t) k) / (size_t) std::max (1, rate / 200)) % 2 ? 1.0f : -1.0f; break;   // square, about 100 Hz
+                        case 4: x = 1.0f; break;                       // DC at full scale
+                        default: x = 0.0f; break;                      // silence
+                    }
+                    d[k] = (c >= nIn) ? 0.12345f : x;                  // an unused second input slot holds a canary value
+                }
+            }
+            sqCount += (size_t) n;
+
+            const auto t0 = std::chrono::steady_clock::now();
+            p.processBlock (view, midi);
+            const auto t1 = std::chrono::steady_clock::now();
+            const double dt = std::chrono::duration<double> (t1 - t0).count();
+            r.wallSeconds += dt;
+            r.audioSeconds += (double) n / (double) rate;
+            if (n >= 64) r.worstBlockRatio = std::max (r.worstBlockRatio, dt / ((double) n / (double) rate));
+
+            for (int c = 0; c < nOut; ++c)
+            {
+                const float* o = view.getReadPointer (c);
+                for (int k = 0; k < n; ++k)
+                {
+                    if (! std::isfinite (o[k])) ++r.nonFinite;
+                    else r.peak = std::max (r.peak, (double) std::fabs (o[k]));
+                }
+            }
+            done += (size_t) n;
+        }
+        p.releaseResources();
+        return r;
+    }
+
+    void testStress()
+    {
+        static const int rates[] = { 44100, 48000, 96000, 192000 };
+        static const int layouts[3][2] = { { 1, 1 }, { 1, 2 }, { 2, 2 } };
+        for (int rate : rates)
+            for (int li = 0; li < 3; ++li)
+            {
+                const int nIn = layouts[li][0], nOut = layouts[li][1];
+                StressResult res[3];
+                bool ok = true;
+                size_t bad = 0;
+                double peak = 0.0, wall = 0.0, audio = 0.0;
+                int saves = 0, loads = 0;
+                for (int m = 0; m < 3; ++m)
+                {
+                    res[m] = stressRun (rate, nIn, nOut, m, 1000u + (uint32_t) (rate / 100) * 11u + (uint32_t) li * 5u + (uint32_t) m);
+                    ok = ok && res[m].rateOk;
+                    bad += res[m].nonFinite;
+                    peak = std::max (peak, res[m].peak);
+                    wall += res[m].wallSeconds;
+                    audio += res[m].audioSeconds;
+                    saves += res[m].stateSaves;
+                    loads += res[m].stateLoads;
+                }
+                const double rtf = wall > 0.0 ? audio / wall : 0.0;
+                char name[160], det[400];
+                std::snprintf (name, sizeof name, "stress: %d Hz, %d in %d out, random controls and input, blocks of 64, 512 and random 1 to 2048: output finite and below 4.0", rate, nIn, nOut);
+                std::snprintf (det, sizeof det, "%.0f s of audio, non-finite samples %.0f, peak %.3f, state saves %d, loads %d", audio, (double) bad, peak, saves, loads);
+                check (ok && bad == 0 && peak < 4.0, name, det);
+                std::snprintf (name, sizeof name, "stress CPU: %d Hz, %d in %d out (this runner, not a user's Mac)", rate, nIn, nOut);
+                std::snprintf (det, sizeof det, "faster than real time by %.1f times (one core %.1f %%), worst block of 64 or more samples took %.1f %% (64), %.1f %% (512), %.1f %% (random) of its length",
+                               rtf, rtf > 0.0 ? 100.0 / rtf : 0.0, 100.0 * res[0].worstBlockRatio, 100.0 * res[1].worstBlockRatio, 100.0 * res[2].worstBlockRatio);
+                info (name, det);
+            }
+    }
+
+    // One NaN and one infinite input sample, then normal input. Information only: the firmware reads an ADC and never sees these, so
+    // what the plugin should do is a decision (docs/open-questions.md), not something the test can call right or wrong.
+    void testNonFiniteInput()
+    {
+        TestProc p;
+        setLayout (p, 2, 2);
+        p.setRateAndBufferSizeDetails (48000.0, 512);
+        p.prepareToPlay (48000.0, 512);
+        juce::AudioBuffer<float> buf (2, 512);
+        juce::MidiBuffer midi;
+        Noise n (77);
+        auto run = [&] (int nBlocks, bool poison)
+        {
+            size_t bad = 0;
+            for (int b = 0; b < nBlocks; ++b)
+            {
+                for (int c = 0; c < 2; ++c) for (int k = 0; k < 512; ++k) buf.setSample (c, k, 0.1f * n.next());
+                if (poison && b == 0)
+                {
+                    buf.setSample (0, 5, std::numeric_limits<float>::quiet_NaN());
+                    buf.setSample (1, 9, std::numeric_limits<float>::infinity());
+                }
+                p.processBlock (buf, midi);
+                for (int c = 0; c < 2; ++c) for (int k = 0; k < 512; ++k) if (! std::isfinite (buf.getSample (c, k))) ++bad;
+            }
+            return bad;
+        };
+        run (100, false);
+        const size_t first = run (1, true);
+        const size_t next1s = run (94, false);
+        const size_t last = run (94, false);
+        info ("input with one NaN and one infinite sample, then normal noise (48000 Hz, stereo)",
+              fmt ("non-finite output samples: in the block with them %.0f, in the next second %.0f, in the second after that %.0f", (double) first, (double) next1s, (double) last));
+        p.releaseResources();
+    }
+
     int selftest()
     {
         testLayouts();
@@ -910,6 +1104,8 @@ namespace
         testLockJackSync();
         testRotatePressSync();
         testNoiseSwitch();
+        testStress();
+        testNonFiniteInput();
         std::printf ("%s: %d checks, %d failed\n", failures ? "FAIL" : "PASS", checks, failures);
         return failures ? 1 : 0;
     }
