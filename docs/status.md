@@ -422,3 +422,7 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - **CI result (build run 41014095440, commit 4ccc0d5; core-macos, build-macos, oracle-linux all success):** `auval` exit 0; package notice lists `Install-Unofficial-SMR.command INSTALL.txt LICENSE-AGPL-3.0.txt licenses THIRD-PARTY-LICENSES.txt Unofficial SMR.component Unofficial SMR.vst3`.
 - Not done: the files under `src/core` carry no in-file copyright line for the firmware they port (the notice ships beside them in the zip and in the repo). A comment-only header on each ported file is possible if Bryn wants it.
 - Milestone 8 remaining: Bryn's normal-use pass on both Macs (including one CPU reading on the Intel Mac), the M4 mac mini tests still outstanding from Milestones 6 and 7, then the tagged v0.1 release.
+
+### CPU reading (Bryn, 2026-10-29 night): CLOSED
+- Bryn: with the SMR plus Ultrabeat, or the SMR plus an audio file, the CPU use is negligible; Logic shows no number for it; his estimate is about 5 %. He had given this several times before (see "M4 mac mini and real SMR" above: "about 5 % or less"). He did not say which Mac this time. No further CPU reading is wanted from him. More plugins in a project add their own load; the SMR's own cost on the CI runner was about 1.1 to 1.5 % of one core per instance (Milestone 8 step 1; the runner, not his Macs).
+- Milestone 8 remaining from Bryn: normal use for a few days on both Macs, reporting any glitch, crash or oddity; then the tagged v0.1.
