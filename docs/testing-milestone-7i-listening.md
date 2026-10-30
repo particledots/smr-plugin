@@ -50,7 +50,7 @@ Test C: Slew on, Morph 0 %
 
 ## 2. Scale Rotation
 
-1. Set "Level 2" to "Level 6" back to 100 % (one at a time). Set "Morph" to 0 %.
+1. Set "Level 2" to "Level 6" back to 100 % (one at a time). Set "Morph" to 0 %. Set "CV Slew" to Off (section 1 left it On).
 2. Set "Scale Rotation" to On.
 3. View menu, Editor. Click the right-hand "Rotate trig" button once, then wait one second. Do this 25 times in total, listening.
 4. Tell me: did the pitches move into a different scale at some point? After how many clicks?
