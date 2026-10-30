@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "Engine.h"
+#include "NoiseSource.h"
 #include "ParamMap.h"
 #include "StateCodec.h"
 #include "Tables.h"
@@ -98,7 +99,7 @@ namespace
 
     void testTable()
     {
-        check (kNumParams == 50, "parameter count is 50", fmt ("%.0f", kNumParams));
+        check (kNumParams == 51, "parameter count is 51", fmt ("%.0f", kNumParams));
 
         bool unique = true, ranges = true, names = true, no4ms = true;
         for (int i = 0; i < kNumParams; ++i)
@@ -761,11 +762,57 @@ namespace
         for (int i = 0; i < 6; ++i) if (a.e->note[i] != b.e->note[i] || a.e->scale[i] != b.e->scale[i] || a.e->scale_bank[i] != b.e->scale_bank[i]) same = false;
         check (same, "restored core holds the same note, scale and bank on every channel");
     }
+    // Milestone 7, step 6 (M7-e): the Noise switch is the 51st parameter, a plugin-only Bool, default off, and it reaches no core input.
+    void testNoiseSwitch()
+    {
+        const int idx = indexOfId ("noise");
+        check (idx == 50 && kNumParams == 51, "Noise switch is parameter 51 (index 50), id \"noise\"", fmt ("%.0f", idx));
+        check (idx >= 0 && spec (idx).kind == Kind::Bool && paramDefault (idx) == 0.0f, "Noise switch is a Bool and defaults to off");
+        check (idx >= 0 && spec (idx).role == Role::Noise && indexOfRole (Role::Noise) == idx, "Noise switch has its own role");
+
+        // It changes no core input: Controls are identical with it on and off.
+        float a[kNumParams], b[kNumParams];
+        for (int i = 0; i < kNumParams; ++i) a[i] = b[i] = paramDefault (i);
+        b[idx] = 1.0f;
+        smr::Controls ca = ParamApplier::buildControls (a), cb = ParamApplier::buildControls (b);
+        check (std::memcmp (&ca, &cb, sizeof ca) == 0, "Noise switch on or off gives identical core Controls");
+
+        // The generator (stand-in): fixed sequence after reset, level and range as documented in NoiseSource.h.
+        NoiseSource n1, n2;
+        const int N = 1 << 20;
+        std::vector<float> x ((size_t) N), y ((size_t) N);
+        n1.fill (x.data(), N);
+        n2.fill (y.data(), 4096);
+        n2.reset();
+        n2.fill (y.data(), N);
+        check (std::memcmp (x.data(), y.data(), sizeof (float) * (size_t) N) == 0, "noise: same sequence after reset(), repeatable");
+        double sum = 0.0, sq = 0.0;
+        float peak = 0.0f;
+        bool finite = true;
+        for (int i = 0; i < N; ++i)
+        {
+            const double v = x[(size_t) i];
+            sum += v; sq += v * v;
+            peak = std::fmax (peak, std::fabs (x[(size_t) i]));
+            if (! std::isfinite (x[(size_t) i])) finite = false;
+        }
+        const double rms = std::sqrt (sq / N), mean = sum / N;
+        check (finite, "noise: every sample is finite");
+        check (std::fabs (rms - (double) kNoiseRms) < 0.002, "noise: rms is 0.1 (-20 dBFS) within 0.002", fmt ("%.5f", rms));
+        check (std::fabs (mean) < 0.001, "noise: mean is near 0", fmt ("%.6f", mean));
+        check (peak <= kNoisePeak && peak > 0.17f, "noise: peak lies just under kNoisePeak and far under the input clip level 0.6875", fmt ("%.5f", (double) peak));
+
+        // Not a pattern of one value: neighbouring samples are nearly uncorrelated.
+        double ac = 0.0;
+        for (int i = 1; i < N; ++i) ac += (double) x[(size_t) i] * (double) x[(size_t) i - 1];
+        check (std::fabs (ac / N / (rms * rms)) < 0.01, "noise: lag-1 correlation is near 0", fmt ("%.5f", ac / N / (rms * rms)));
+    }
 }
 
 int main()
 {
     testTable();
+    testNoiseSwitch();
     testDefaults();
     testUnitMapping();
     testSwitches();

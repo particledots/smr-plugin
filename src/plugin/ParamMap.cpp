@@ -74,6 +74,8 @@ namespace smr_plugin
             B ("lockjack135", "Lock 1 3 5 (trigger)", LockJackOdds, 0, 0.0f), B ("lockjack246", "Lock 2 4 6 (trigger)", LockJackEvens, 0, 0.0f),
             // Milestone 7, step 4: the ROTATE press (forbidden notes), a trigger appended after the Lock jacks
             B ("rotatepress", "Rotate Press (trigger)", RotatePress, 0, 0.0f),
+            // Milestone 7, step 6: the Noise switch (plugin only, M7-e), the 51st parameter. A normal host parameter, so it is saved with the project.
+            B ("noise", "Noise (stand-in)", Noise, 0, 0.0f),
         };
 #undef F
 #undef B

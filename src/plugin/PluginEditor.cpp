@@ -68,6 +68,7 @@ public:
         sw (evensSwitch,  "evensmode",     2, false, 909, 182, 52);
         sw (slewSwitch,   "slew",          2, false, 91, 367, 52);
         sw (scaleRotSwitch, "scalerotation", 2, false, 91, 429, 52);
+        sw (noiseSwitch,  "noise",         2, false, 91, 491, 52);    // plugin only, stand-in noise (Milestone 7, step 6; position is a first guess, not seen yet)
         sw (prePostSwitch, "prepost",      2, true,  909, 367, 52);    // parameter index 0 is Post, drawn on the right
         sw (envSwitch,    "envspeed",      4, false, 909, 429, 104);   // the fourth position, 1V/oct, is plugin only (Milestone 7, step 5)
 
@@ -271,6 +272,7 @@ public:
         label (g, "Freq", 909.0f, 285.0f, 100.0f);
         label (g, "CV slew", 91.0f, 387.0f, 120.0f);
         label (g, "Scale rotation", 91.0f, 456.0f, 130.0f);
+        label (g, "Noise (stand-in)", 91.0f, 518.0f, 130.0f);
         label (g, "Pre " + dot + " Post", 909.0f, 387.0f, 120.0f);
         g.setFont (14.0f);   // smaller and centred under the switch (909): at 16 pt and centre 905 the "t" of 1V/oct touched the panel edge (Bryn, 2026-10-29)
         label (g, "Fast " + dot + " Trig " + dot + " Slow " + dot + " 1V/oct", 909.0f, 456.0f, 160.0f);
@@ -286,6 +288,7 @@ public:
         g.setColour (smrui::edge());
         for (auto* c : { &filterMode, &filterType, &bank })
             smrui::dashedRoundedRect (g, c->getBounds().toFloat().reduced (1.0f), 6.0f);
+        smrui::dashedRoundedRect (g, noiseSwitch->getBounds().toFloat().reduced (1.0f), 6.0f);   // the Noise switch is plugin only
         {   // the 1V/oct position of the env switch is not on the module: dashed around its quarter of the switch
             auto b = envSwitch->getBounds().toFloat();
             smrui::dashedRoundedRect (g, b.removeFromRight (b.getWidth() * 0.25f).reduced (1.0f), 6.0f);
@@ -465,7 +468,7 @@ private:
     juce::Slider levels[6], nudge[2], freq[2], qKnob, morph, spread;
     std::unique_ptr<smrui::LockButton> locks[6];
     juce::ComboBox filterMode, filterType, bank;
-    std::unique_ptr<smrui::SlideSwitch> oddsSwitch, evensSwitch, slewSwitch, scaleRotSwitch, prePostSwitch, envSwitch;
+    std::unique_ptr<smrui::SlideSwitch> oddsSwitch, evensSwitch, slewSwitch, scaleRotSwitch, noiseSwitch, prePostSwitch, envSwitch;
     std::unique_ptr<smrui::PulseButton> rotCcw, rotCw, scaleDown, scaleUp, lockOdds, lockEvens, rotPress;
     std::unique_ptr<smrui::RotateDial> dial;
 

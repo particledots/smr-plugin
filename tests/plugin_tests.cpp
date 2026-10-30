@@ -657,6 +657,64 @@ namespace
                "trigger counters: the window's accessors give the same rising counts and equal falling counts");
     }
 
+    // Milestone 7, step 6 (M7-e): the Noise switch replaces the host input on both input slots. Same processBlock as in Logic; the noise
+    // generator itself is checked headless in tests/param_tests.cpp. CI only (JUCE).
+    void testNoiseSwitch()
+    {
+        constexpr int kBlock = 512, kBlocks = 200;
+        auto runOne = [&] (bool noiseOn, bool loudHostInput, std::vector<float>& out0, std::vector<float>& out1)
+        {
+            auto proc = std::make_unique<SmrAudioProcessor>();
+            proc->setRateAndBufferSizeDetails (48000.0, kBlock);
+            proc->prepareToPlay (48000.0, kBlock);
+            auto* pp = proc->parameters().getParameter ("noise");
+            pp->setValueNotifyingHost (noiseOn ? 1.0f : 0.0f);
+            juce::AudioBuffer<float> buf (2, kBlock);
+            juce::MidiBuffer midi;
+            long pos = 0;
+            for (int b = 0; b < kBlocks; ++b)
+            {
+                buf.clear();
+                if (loudHostInput)
+                    for (int k = 0; k < kBlock; ++k, ++pos)
+                    {
+                        const float v = 0.5f * (float) std::sin (2.0 * 3.14159265358979 * 440.0 * (double) pos / 48000.0);
+                        buf.setSample (0, k, v);
+                        buf.setSample (1, k, -v);
+                    }
+                proc->processBlock (buf, midi);
+                for (int k = 0; k < kBlock; ++k) { out0.push_back (buf.getSample (0, k)); out1.push_back (buf.getSample (1, k)); }
+            }
+        };
+
+        std::vector<float> aL, aR, bL, bR, cL, cR, dL, dR;
+        runOne (true,  false, aL, aR);   // A: noise on, silent host input
+        runOne (true,  true,  bL, bR);   // B: noise on, loud host input
+        runOne (false, false, cL, cR);   // C: noise off, silent host input
+        runOne (false, true,  dL, dR);   // D: noise off, loud host input
+
+        auto peak = [] (const std::vector<float>& v) { float m = 0.0f; for (float x : v) m = std::max (m, std::fabs (x)); return (double) m; };
+        check (peak (cL) < 1.0e-6 && peak (cR) < 1.0e-6, "noise switch off, silent host input: silent output", fmt ("%.3g %.3g", peak (cL), peak (cR)));
+        check (peak (aL) > 1.0e-4 && peak (aR) > 1.0e-4, "noise switch on, silent host input: the SMR resonates the noise on both outputs", fmt ("%.3g %.3g", peak (aL), peak (aR)));
+        check (aL == bL && aR == bR, "noise switch on: the host input has no effect (bit for bit, silent against loud sine)");
+        check (peak (dL) > 1.0e-3 && dL != aL, "noise switch off: the host input is heard, and differs from the noise result");
+        info ("noise switch: peak output over 200 blocks of 512 at 48000 Hz (stand-in noise at -20 dBFS rms, default settings)", fmt ("L %.4g, R %.4g", peak (aL), peak (aR)));
+
+        // Saved with the project as a normal host parameter.
+        auto src = std::make_unique<SmrAudioProcessor>();
+        src->setRateAndBufferSizeDetails (48000.0, kBlock);
+        src->prepareToPlay (48000.0, kBlock);
+        src->parameters().getParameter ("noise")->setValueNotifyingHost (1.0f);
+        juce::MemoryBlock mb;
+        src->getStateInformation (mb);
+        auto dst = std::make_unique<SmrAudioProcessor>();
+        dst->setRateAndBufferSizeDetails (48000.0, kBlock);
+        dst->prepareToPlay (48000.0, kBlock);
+        check (dst->parameters().getRawParameterValue ("noise")->load() < 0.5f, "noise switch: a new instance starts with it off");
+        dst->setStateInformation (mb.getData(), (int) mb.getSize());
+        check (dst->parameters().getRawParameterValue ("noise")->load() >= 0.5f, "noise switch: on after saving and loading the project state");
+    }
+
     // Milestone 6b: the lights' rules (JUCE-free, tests/display_checks.h) and the audio side's publishing through the real processor.
     // The audio output itself is covered by the bit-for-bit checks above, which run the same processBlock.
     void testDisplay()
@@ -851,6 +909,7 @@ namespace
         testLockHoldSync();
         testLockJackSync();
         testRotatePressSync();
+        testNoiseSwitch();
         std::printf ("%s: %d checks, %d failed\n", failures ? "FAIL" : "PASS", checks, failures);
         return failures ? 1 : 0;
     }

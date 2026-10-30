@@ -49,6 +49,7 @@ SmrAudioProcessor::SmrAudioProcessor()
 {
     for (int i = 0; i < smr_plugin::kNumParams; ++i)
         raw[i] = apvts.getRawParameterValue (smr_plugin::spec (i).id);
+    noiseIndex = smr_plugin::indexOfId ("noise");
     startTimerHz (30);
 }
 
@@ -95,6 +96,7 @@ void SmrAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     // Only the exact host/core rate ratios of src/host/Resampler are supported (docs/architecture.md 12.2).
     rateSupported = std::abs (sampleRate - (double) rate) < 0.5 && adapter.prepare (rate, maxBlock);
     scratch.assign ((size_t) maxBlock, 0.0f);
+    noise.reset();
 
     hostRateStat.store (sampleRate);
     rateSupportedStat.store (rateSupported);
@@ -193,6 +195,15 @@ void SmrAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     float* ch0 = buffer.getWritePointer (0);
     float* ch1 = nOut > 1 ? buffer.getWritePointer (1) : nullptr;
     const float* in1 = nIn > 1 ? buffer.getReadPointer (1) : nullptr;   // null: mono input, copied to both input slots
+
+    // Noise switch (M7-e, plugin only, stand-in generator): the host input is replaced on both input slots. One signal, mono style
+    // (manual: the noise is normalled to the odds IN jack and evens IN is normalled to odds IN). The window's input meters and clip LED
+    // below see this noise, because it is what the core is fed.
+    if (noiseIndex >= 0 && values[noiseIndex] >= 0.5f)
+    {
+        noise.fill (ch0, n);
+        in1 = nullptr;
+    }
 
     // Window only (Milestone 6b): input peaks and the input clip test, read before the in-place processing overwrites them.
     // Positive samples only, as audio_util.c does (no absolute value); mono input feeds both slots.

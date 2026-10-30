@@ -9,6 +9,7 @@
 
 #include "BlockAdapter.h"
 #include "DisplayModel.h"
+#include "NoiseSource.h"
 #include "ParamMap.h"
 
 class SmrAudioProcessor : public juce::AudioProcessor, private juce::Timer
@@ -79,7 +80,9 @@ private:
 
     smr_host::BlockAdapter adapter;
     smr_plugin::ParamApplier applier;
-    std::vector<float> scratch;     // second output slot when the host output is mono
+    smr_plugin::NoiseSource noise;  // Noise switch generator (M7-e): audio thread only; reset in prepareToPlay
+    int noiseIndex = -1;            // index of the "noise" parameter
+    std::vector<float> scratch;    // second output slot when the host output is mono
     smr_plugin::DisplayHub display;
 
     void timerCallback() override { syncLockParameters(); }
