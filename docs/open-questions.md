@@ -29,9 +29,14 @@ Options for a free plugin:
 Decision needed before any public release. Test builds for yourself do not need
 this decided.
 
+**DECIDED (Bryn, 2026-10-29): route B, AGPLv3.** The plugin as a whole is AGPLv3 (`LICENSE`); the
+repository is already public. Not checked against JUCE's own site; see the note above.
+
 ### Q2. Licence for the code in `src/`
 No licence is assigned. Default is all rights reserved. It depends on Q1
 (route B forces AGPLv3 on the combined plugin).
+
+**DECIDED by Q1 (2026-10-29):** AGPLv3, copyright (c) 2026 particledots (the holder name is my wording; change it if you want your own name).
 
 ### Q3. Kickoff pack says "4ms copyright"; the source says otherwise
 The kickoff pack says to copy the MIT licence "with the 4ms copyright".
@@ -51,6 +56,10 @@ The firmware `LICENSE` says the hardware is CC BY-NC-SA. The GUI is meant to
 resemble the module (Milestone 6). Whether copying the panel layout counts as
 using the hardware design is not something I can settle. Needs your decision or
 the designer's answer before the GUI is shared.
+
+**DECIDED (Bryn, 2026-10-29): state it plainly.** The README says the layout follows the module's
+panel, the plugin is free and non-commercial, no logo or maker name is used, and that this is not
+legal clearance. The designer has not been asked.
 
 ## Milestone 1 source audit: licensing answers
 

@@ -345,11 +345,16 @@ jobs:
           cp -R build/SMR_artefacts/Release/AU/*.component dist/Unofficial-SMR/
           cp -R build/SMR_artefacts/Release/VST3/*.vst3 dist/Unofficial-SMR/
           cp THIRD-PARTY-LICENSES.txt dist/Unofficial-SMR/
+          cp LICENSE dist/Unofficial-SMR/LICENSE-AGPL-3.0.txt
           cp docs/INSTALL.txt dist/Unofficial-SMR/
           cp tools/install/Install-Unofficial-SMR.command dist/Unofficial-SMR/
           chmod +x dist/Unofficial-SMR/Install-Unofficial-SMR.command
           cp -R licenses dist/Unofficial-SMR/
           ls -la dist/Unofficial-SMR
+          for f in LICENSE-AGPL-3.0.txt THIRD-PARTY-LICENSES.txt INSTALL.txt Install-Unofficial-SMR.command licenses/SMR-LICENSE.txt; do
+            [ -f "dist/Unofficial-SMR/$f" ] || { echo "::error::PACKAGE missing $f"; exit 1; }
+          done
+          echo "::notice::PACKAGE contents: $(ls dist/Unofficial-SMR | tr '\n' ' ')"
 
       - name: Inspect the build (architectures, minimum macOS, AU identity)
         run: |

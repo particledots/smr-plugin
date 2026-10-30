@@ -45,19 +45,23 @@ by this plugin.
 
 The full upstream licence file is kept verbatim in licenses/SMR-LICENSE.txt.
 
-Milestone 0 status: the pass-through plugin does NOT yet contain any firmware
-code. This notice is included from the start so it is never forgotten.
-
-
 2. JUCE
 -------
 
-The plugin is built with the JUCE framework, version 8.0.6. JUCE is dual
-licensed (AGPLv3, or the commercial JUCE 8 End User Licence Agreement); see the
-LICENSE.md file in the JUCE repository at tag 8.0.6 and
-https://juce.com/legal/juce-8-licence/ . Which route applies to this plugin
-is recorded in docs/open-questions.md and must be settled before any public
-release.
+The plugin is built with the JUCE framework, version 8.0.6, used under its AGPLv3
+option (see the LICENSE.md file in the JUCE repository at tag 8.0.6 and
+https://juce.com/legal/juce-8-licence/ ). Route chosen by the author on 2026-10-29
+(docs/open-questions.md, Q1).
 
 JUCE bundles further components (for example the VST3 SDK and the Audio Unit
 SDK) under their own licences, listed in JUCE's LICENSE.md.
+
+
+3. Unofficial SMR itself
+------------------------
+
+Unofficial SMR as a whole is licensed under the GNU Affero General Public Licence
+version 3, copyright (c) 2026 particledots. The full text is in the file LICENSE
+(shipped as LICENSE-AGPL-3.0.txt next to this file). The complete source of every
+build is at https://github.com/particledots/smr-plugin . The MIT-licensed firmware
+code in section 1 may be combined into this AGPL work; its notice stays as above.
