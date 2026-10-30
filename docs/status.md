@@ -344,3 +344,10 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - `src/plugin/PluginEditor.cpp`: the Fast/Trig/Slow/1V/oct label is 14 pt, centred at x 909 (the switch centre), width 160 (was 16 pt, centre 905, width 180). Dashed outline unchanged (Bryn did not ask for a stronger one).
 - `src/plugin/PluginProcessor.cpp setStateInformation`: after a successful `decodeSnapshot`, `snap.freqblock = 0`. `StateCodec` and the saved format are unchanged, so `Engine::loadSnapshot` recomputes `num_freq_blocked` as 0 (system_mode.c load_params_from_sram logic, already ported). The existing codec tests (`freqblock == 5` round trip) still describe the codec only.
 - Nothing compiled or run: the JUCE code is built by CI only. No `src/core` change.
+
+- **CI result (build run 40888491959, attempt 4, commit 52a09b8; core-macos, build-macos, oracle-linux all success; 2026-10-29):** attempts 1 to 3 were cancelled with no macOS runner ("not acquired by Runner of type hosted"), no step ran. I read only the job conclusions, not the step logs, so the check counts of this run are not recorded here.
+### Milestone 7 step 5b test (Bryn, **Intel Mac assumed, he did not say otherwise**; run 40888491959, 2026-10-29 evening; the M4 mac mini has not tested this build)
+- Section 1 (label, resize, four positions): all good. The label is inside the panel border.
+- Section 2 (forbidden notes reset on load): grey light present before saving; after save, close and reopen, no grey light and counter 0, exactly as expected.
+- Section 3 (1V/oct saved and reloaded): as expected.
+- **Step 5 and 5b ACCEPTED on the Intel Mac.** Step 5 window defect fixed. M1-h now DECIDED and implemented (reset on load).

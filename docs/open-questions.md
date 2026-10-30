@@ -429,3 +429,4 @@ In: "odds" is input slot 1, which feeds channels 1, 3, 5 (`Engine.h processBlock
   - **M7-l (b) One-Pass 1V/oct not updated: DECIDED.** Left as the firmware does it in Phase 1; Phase 2 candidate.
   - **M7-l step 5 test (Intel Mac, 2026-10-29):** lights, rotate, transposition, switch jumps, glissando, saved project and sound all as expected; on the real SMR the behaviour agrees (manual p.18). Window: label touched the panel edge (fixed in step 5b, untested); dashed outline faint but present.
   - **Still open:** M1-c and M2-c (need a stopwatch measurement on the real SMR: all six Locks pressed, time from the last press to the first amber flash).
+  - **M1-h (reset on load) tested:** Intel Mac, 2026-10-29, run 40888491959: grey light gone and counter 0 after reopening a saved project. M4 mac mini not tested.
