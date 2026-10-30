@@ -1,87 +1,165 @@
-# Milestone 7 listening sheet (rewritten 2026-10-29, v2)
+# Milestone 7 listening sheet (v3, 2026-10-29)
 
-This sheet is about the PLUGIN in Logic only. You do not need your real SMR for anything here.
+This sheet is about the PLUGIN in Logic only. You do not need your real SMR.
 Intel Mac first. Build run 40987029109 (commit a683e44).
 
-## How to set a control: two views of the same plugin window
+## How to read this sheet
 
-At the top of the plugin window there is a **View** pop-up menu. It has two entries:
+Every step is one action. Words in "quotes" are names exactly as they appear in the plugin's Controls list.
+
+The plugin window has a **View** menu at the top. It has two entries:
 - **Editor**: the picture of the SMR (sliders, knobs, switches, lights, buttons).
 - **Controls**: a plain list of every parameter, each with a slider and a number box.
+If there is no View menu, stop and tell me.
 
-(Apple's Logic documentation describes the View menu this way. I have not tried it in your Logic 10.7.8.
-If there is no View menu in your window, stop and tell me; do not work around it.)
+**"Set X to Y"** always means: View menu, Controls. Find X in the list. Drag its slider until its number box reads Y.
+- A slider at the far left reads 0 %. At the far right it reads 100 %.
+- Four controls do not show percent: "Rotate CV" shows 0 to 19, "Scale CV" shows 0 to 10, "Spread" shows 1 to 16, and switches show words.
 
-Rule for this sheet: **I name the view each time.** Controls-list names are in "quotes", exactly as they appear in the list.
-- Level CV 1 to 6, Res (Q) CV, Rotate CV and Scale CV are ONLY in the Controls list. They are not in the Editor.
-- Lights (the six Env out lights, the ring) are ONLY in the Editor.
-- To set a value in the Controls list: drag the slider until the number box shows the value I give. (Typing a number into the box may also work; check that the box then shows the value I gave.)
-- The number box shows "%" for most controls. Four are different: "Rotate CV" shows 0 to 19, "Scale CV" shows 0 to 10, "Spread" shows 1 to 16, and the switches show words.
+Level CV 1 to 6, "Res (Q) CV", "Rotate CV" and "Scale CV" exist ONLY in the Controls list. The lights exist ONLY in the Editor.
 
-## Setup, once, before section 1
-1. Insert a NEW Unofficial SMR on a track (so every control starts at its default). Wait 10 seconds after opening the window.
-2. View: Editor. Click the **Noise (stand-in)** switch (left side, under "Scale rotation") so it is ON. You now hear a steady sound. Playback can stay stopped.
-3. View: Controls. Set "Level 2", "Level 3", "Level 4", "Level 5" and "Level 6" to 0 %, so only channel 1 sounds. (Sections 1 and 3 need this. Put them back to 100 % afterwards, or insert a new instance for later sections.)
+## Start (do this once, and again whenever I say "new instance")
 
-## 1. CV Slew (channel 1 only)
-1. View: Controls. "Morph" 0 %, "CV Slew" Off. Set "Level CV 1" to 0 %. Channel 1 should go silent. Now set "Level CV 1" to 100 % in one move. Tell me whether the sound jumps to full at once or rises.
-2. "Morph" 60 %, "CV Slew" On. Repeat: "Level CV 1" 0 %, then 100 % in one move. I expect a slower rise. Tell me about how many seconds it takes.
-3. "Morph" 0 %, "CV Slew" On. Repeat. No expectation: tell me what you hear.
+1. Insert a NEW Unofficial SMR on a track. Wait 10 seconds after its window opens.
+2. View menu, Editor.
+3. Click the switch labelled "Noise (stand-in)" (left side, under "Scale rotation") so it is ON. You hear a steady sound.
+4. View menu, Controls.
+5. Set "Level 2" to 0 %. Do the same for "Level 3", "Level 4", "Level 5" and "Level 6". Now only channel 1 sounds.
+
+## 1. CV Slew
+
+Test A: Slew off
+1. Set "Morph" to 0 %.
+2. Set "CV Slew" to Off.
+3. Set "Level CV 1" to 0 %. The sound goes silent.
+4. Drag the "Level CV 1" slider all the way right in one quick movement.
+5. Tell me: does the sound come back at once, or fade up?
+
+Test B: Slew on, Morph 60 %
+1. Set "Morph" to 60 %.
+2. Set "CV Slew" to On.
+3. Set "Level CV 1" to 0 %. The sound goes silent.
+4. Drag the "Level CV 1" slider all the way right in one quick movement.
+5. Tell me roughly how many seconds the sound takes to reach full level. I expect it to take longer than in Test A.
+
+Test C: Slew on, Morph 0 %
+1. Set "Morph" to 0 %. Leave "CV Slew" On.
+2. Set "Level CV 1" to 0 %.
+3. Drag the "Level CV 1" slider all the way right in one quick movement.
+4. Tell me what you hear. No expectation.
 
 ## 2. Scale Rotation
-1. Put all six Levels back to 100 % (View: Controls). "Morph" 0 %.
-2. View: Editor. The **Scale rotation** switch is on the left, second from the top of the three switches under the Lock row. Turn it ON (check in the Controls list: "Scale Rotation" On).
-3. View: Editor. Click the right-hand **Rotate trig** button 25 times, one click about every second, listening. Tell me whether the pitches move into a different scale at some point, and after how many clicks.
-4. Turn "Scale Rotation" Off and click the same button 25 times. I expect the pitches to wrap around the same scale.
 
-## 3. Level CV (channel 1 only: set "Level 2" to "Level 6" to 0 % again)
-1. View: Controls. "Level 1" 100 %. Set "Level CV 1" to 100 %, 50 %, 10 %, 0 %. I expect the level to fall with it and channel 1 to be silent at 0 %.
-2. "Level 1" 50 %, "Level CV 1" 100 %. I expect about the same loudness as "Level 1" 100 % with "Level CV 1" 50 %. Tell me if it is clearly different.
+1. Set "Level 2" to "Level 6" back to 100 % (one at a time). Set "Morph" to 0 %.
+2. Set "Scale Rotation" to On.
+3. View menu, Editor. Click the right-hand "Rotate trig" button once, then wait one second. Do this 25 times in total, listening.
+4. Tell me: did the pitches move into a different scale at some point? After how many clicks?
+5. View menu, Controls. Set "Scale Rotation" to Off.
+6. View menu, Editor. Click the same button 25 times again, one click per second.
+7. I expect the pitches to wrap around the same scale. Tell me what you hear.
 
-## 4. Res (Q) CV (all six Levels back to 100 %)
-1. View: Controls. "Res (Q) Knob" 0 %. Set "Res (Q) CV" to 0 %, 50 %, 100 %. I expect the ringing to get longer each time.
-2. "Res (Q) Knob" 100 %, "Res (Q) CV" 100 %. Tell me if it behaves sensibly (no runaway, no silence).
+## 3. Level CV
+
+Start: Set "Level 2" to "Level 6" to 0 % again, so only channel 1 sounds.
+1. Set "Level 1" to 100 %.
+2. Set "Level CV 1" to 100 %. Listen.
+3. Set "Level CV 1" to 50 %. Listen.
+4. Set "Level CV 1" to 10 %. Listen.
+5. Set "Level CV 1" to 0 %. Listen.
+6. I expect the sound to get quieter at each step and to be silent at 0 %. Tell me if not.
+7. Set "Level 1" to 50 % and "Level CV 1" to 100 %. Listen.
+8. Set "Level 1" to 100 % and "Level CV 1" to 50 %. Listen.
+9. I expect steps 7 and 8 to sound about the same loudness. Tell me if they are clearly different.
+
+## 4. Res (Q) CV
+
+1. Set "Level 2" to "Level 6" back to 100 %.
+2. Set "Res (Q) Knob" to 0 %.
+3. Set "Res (Q) CV" to 0 %. Listen to how long the sound rings.
+4. Set "Res (Q) CV" to 50 %. Listen.
+5. Set "Res (Q) CV" to 100 %. Listen.
+6. I expect the ringing to get longer at each step.
+7. Set "Res (Q) Knob" to 100 % and leave "Res (Q) CV" at 100 %.
+8. Tell me if it sounds sensible (no runaway loudness, no silence).
 
 ## 5. Rotate CV
-1. View: Controls. "Rotate CV" shows a number from 0 to 19. Set it to 0, 1, 2, 3, 4, 10, 19, one after another, waiting 2 seconds each time.
-2. Tell me whether the pattern moves one position for each step of the number.
+
+1. Set "Res (Q) Knob" and "Res (Q) CV" back to 0 %.
+2. "Rotate CV" shows a number from 0 to 19. Set "Rotate CV" to 0. Listen for 2 seconds.
+3. Set it to 1. Listen for 2 seconds. Then 2, then 3, then 4, then 10, then 19, 2 seconds each.
+4. Tell me: did the sound change at each new number? Did the pattern move by one position for each step of the number?
 
 ## 6. Scale CV
-1. View: Controls. "Scale CV" shows a number from 0 to 10. Set it to 0, 1, 2, ... 10, waiting 2 seconds each time.
-2. Tell me whether the scale changes with each number and how many different scales you hear.
 
-## 7. Spread (the Spread knob returns to the same sound)
-1. View: Controls. "Spread" shows 1 to 16. Set it to 1. In View: Editor, note the sound and the pattern of the ring lights (the ring around the Rotate dial).
-2. View: Controls. Set "Spread" to 16, then back to 1.
-3. View: Editor. I expect exactly the same sound and ring pattern as in step 1. Tell me if not.
+1. Set "Rotate CV" back to 0.
+2. "Scale CV" shows a number from 0 to 10. Set "Scale CV" to 0. Listen for 2 seconds.
+3. Set it to 1, then 2, then 3, and so on up to 10, listening 2 seconds at each.
+4. Tell me: does the scale change at each number? How many different scales did you hear?
 
-## 8. Trigger threshold, Pre and Post (manual p.18; docs/open-questions.md M7-m)
-1. View: Controls. "Fast | Trigger | Slow | 1V/oct Switch" = Trigger. "Pre | Post Switch" = Post. Noise stays ON.
-2. View: Controls. Lower "Level 1" until Env out light 1 (View: Editor, the row of six round lights under the sliders, labelled "Env out") just goes dark. Raise it a little until it just lights. Leave "Level 1" there.
-3. Set "Pre | Post Switch" = Pre. Set "Level 1" to 0 %. I expect light 1 to stay as it was (the threshold was stored). Tell me what you see.
-4. Set "Pre | Post Switch" = Post again. I expect the threshold to follow "Level 1" again, so light 1 goes dark at 0 %. (Manual p.18 says the opposite direction erases it; the firmware overwrites it in Post.) Tell me what you see.
-5. Insert a second NEW Unofficial SMR, set Trigger, Noise ON, set "Pre | Post Switch" = Pre straight away without ever using Post. Tell me whether any light is on. No expectation.
+## 7. Spread comes back to the same sound
+
+1. Set "Scale CV" back to 0.
+2. "Spread" shows a number from 1 to 16. Set "Spread" to 1.
+3. View menu, Editor. Listen, and look at the ring of small lights around the Rotate dial. Remember what the ring looks like.
+4. View menu, Controls. Set "Spread" to 16.
+5. Set "Spread" back to 1.
+6. View menu, Editor. Compare the sound and the ring with step 3. I expect them to be exactly the same. Tell me if not.
+
+## 8. Trigger threshold, Pre and Post (manual p.18)
+
+1. View menu, Controls. Set "Fast | Trigger | Slow | 1V/oct Switch" to Trigger.
+2. Set "Pre | Post Switch" to Post.
+3. Set "Level 2" to "Level 6" to 0 %. Set "Level 1" to 100 %. Noise stays ON.
+4. View menu, Editor. Look at the row of six round lights under the sliders, labelled "Env out". Find light 1 (the leftmost). It should be lit.
+5. View menu, Controls. Drag "Level 1" down slowly until light 1 (Editor) just goes dark. Then raise "Level 1" a little until light 1 just lights again. Leave "Level 1" there.
+6. Set "Pre | Post Switch" to Pre.
+7. Set "Level 1" to 0 %.
+8. View menu, Editor. I expect light 1 to stay as it was in step 5 (the threshold was stored). Tell me what you see.
+9. View menu, Controls. Set "Pre | Post Switch" back to Post.
+10. View menu, Editor. I expect light 1 to go dark, because the threshold follows "Level 1" again. (Manual p.18 says the opposite direction erases it; the firmware overwrites it in Post.) Tell me what you see.
+11. Do "Start" again with a NEW instance. Set "Fast | Trigger | Slow | 1V/oct Switch" to Trigger and "Pre | Post Switch" to Pre immediately, never using Post. Tell me whether any Env out light is on. No expectation.
 
 ## 9. Env Out Trigger mode
-1. Noise ON, "Fast | Trigger | Slow | 1V/oct Switch" = Trigger, "Pre | Post Switch" = Post, all Levels 100 %. I expect the six Env out lights on all the time with steady noise.
-2. Noise OFF, "Res (Q) Knob" 0 %. Play a short drum hit or click through the track. I expect each light to flash on with each hit.
-3. Skipped: how long a light stays on (50 ms or 100 ms) cannot be judged by eye. It needs a recording; it stays open (M7-m).
 
-## 10. Freq knob with the 135 | 1 and 246 | 6 switches (hear only the channels named)
-Controls: "Level 1" and "Level 3" 100 %, all other Levels 0 %. Noise ON.
-1. View: Controls. "135 | 1 Switch" = 135 (all odd channels). View: Editor: turn the left **Freq** knob (below the left Freq nudge knob). I expect both pitches (channels 1 and 3) to move together.
-2. "135 | 1 Switch" = 1 (channel 1 only). Turn the same knob. I expect only channel 1 to move; channel 3 stays. Repeat with the left Freq **nudge** knob (the top left knob).
-3. Now "Level 4" and "Level 6" 100 %, all other Levels 0 %. "246 | 6 Switch" = 6 (channel 6 only). Turn the right Freq knob. I expect only channel 6 to move; channel 4 stays.
+1. Use the instance from the Start section, Noise ON. Set all six Levels to 100 %. Set "Fast | Trigger | Slow | 1V/oct Switch" to Trigger and "Pre | Post Switch" to Post.
+2. View menu, Editor. I expect all six Env out lights to stay on with the steady noise. Tell me what you see.
+3. Click the "Noise (stand-in)" switch so it is OFF. Set "Res (Q) Knob" to 0 %.
+4. Play a short drum hit or click from a region on the track.
+5. I expect each Env out light to flash on with each hit. Tell me what you see.
+6. Not asked: how long a light stays on. It cannot be judged by eye (open item M7-m).
+
+## 10. Freq knob with the "135 | 1" and "246 | 6" switches
+
+Start with a NEW instance (Start section, but in step 5 set only "Level 2", "Level 4", "Level 5" and "Level 6" to 0 %, so "Level 1" and "Level 3" sound).
+1. Set "135 | 1 Switch" to 135 (all odd channels).
+2. View menu, Editor. Slowly turn the left "Freq" knob (the one below the top left knob). Listen.
+3. I expect both pitches (channels 1 and 3) to move together. Tell me what you hear.
+4. View menu, Controls. Set "135 | 1 Switch" to 1 (channel 1 only).
+5. View menu, Editor. Turn the same left Freq knob again. I expect only channel 1 to move. Channel 3 stays.
+6. Turn the top left "Freq Nudge" knob. I expect the same: only channel 1 moves.
+7. View menu, Controls. Set "Level 1" and "Level 3" to 0 %. Set "Level 4" and "Level 6" to 100 %.
+8. Set "246 | 6 Switch" to 6 (channel 6 only).
+9. View menu, Editor. Turn the right "Freq" knob. I expect only channel 6 to move. Channel 4 stays.
 
 ## 11. Spread and Scale with a Lock on
-1. "Level 1" and "Level 3" 100 %, all other Levels 0 %. View: Editor: click Lock button 3 (the round button above slider 3).
-2. Set "Spread" (Controls list, 1 to 16) from 1 to 16, then click the right-hand **Scale** button (Editor, bottom row) twice. I expect channel 3 to stay at its pitch; channel 1 changes.
-3. Click Lock button 3 again to unlock. Set "Spread" back to 1. I expect channel 3 to follow again.
+
+1. View menu, Controls. Set "Level 1" and "Level 3" to 100 %. Set all other Levels to 0 %. Set "Spread" to 1.
+2. View menu, Editor. Click the round Lock button above slider 3 so it lights.
+3. View menu, Controls. Set "Spread" to 16.
+4. View menu, Editor. Click the right-hand "Scale" button twice.
+5. I expect channel 3 to stay at its pitch while channel 1 changes. Tell me what you hear.
+6. Click the Lock button above slider 3 again to unlock it.
+7. View menu, Controls. Set "Spread" back to 1.
+8. I expect channel 3 to follow again. Tell me what you hear.
 
 ## 12. Bank names against manual p.24
-Manual groups: Blue 6 banks, Pink 3, Orange 4, Green 6, White 1 (custom) = 20.
-1. View: Editor: click the **Bank** pop-up in the bottom row (the third pop-up, dashed outline). Tell me how many entries it lists and the names in order.
-2. The window does not show the group colours or the bank flash from manual p.24 (your decision, 2026-10-29). Do not expect them. Choose Blue 1, then Pink 1, Orange 1, Green 1, White, and tell me only whether each choice changes the sound.
+
+The manual lists 20 banks: Blue 6, Pink 3, Orange 4, Green 6, White 1.
+1. View menu, Editor. Click the "Bank" pop-up in the bottom row (the third pop-up, with the dashed outline).
+2. Tell me how many entries it lists, and write down the names in order.
+3. Choose Blue 1. Listen. Then Pink 1, Orange 1, Green 1, White, one after another.
+4. Tell me only whether each choice changes the sound. Group colours and the bank flash from manual p.24 are not built (your decision, 2026-10-29); do not expect them.
 
 ## Report
-Per number (for example "5.2"): what you heard or saw, and where it differs from "I expect". Say the Mac and the build run.
+
+Per number (for example "5.4"): what you heard or saw, and where it differs from "I expect". Say the Mac and the build run.
