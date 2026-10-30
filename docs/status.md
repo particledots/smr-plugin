@@ -373,3 +373,12 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - docs/testing-milestone-7i-listening.md section 12 step 2 corrected: it expected Env Out group colours, which are not built.
 - M7-e itself was already built and CI-green before these decisions (commit a683e44, run 40987029109, checked with `gh run view`: core-macos, build-macos, oracle-linux all success). Waiting for Bryn's Intel Mac result on docs/testing-milestone-7h.md and 7i.
 
+### Milestone 7 step 6 test: Noise switch (Bryn, **Intel Mac**, 2026-10-29 evening; build run 40987029109 assumed from the test sheet, he did not state it; the M4 mac mini has not tested this build)
+- Section 1: the switch is there, looks good, right under the Scale rotation switch and above the input VU meters.
+- Section 2: sound works as described; Bryn: "this is what I am used to hearing on my actual SMR". That is his report, not a measurement; the generator is still the labelled stand-in (M7-e).
+- Section 3: exactly as described (Bryn: a potentially useful musical feature, switched on and off during a composition).
+- Sections 4 and 5: as described (save, reopen, save works).
+- Section 6: "Noise (stand-in)" is in the automation list; a second instance has Noise off.
+- Answers were short ("as described"), not itemised per step.
+- **Step 6 (M7-e) ACCEPTED on the Intel Mac.** Not tested: M4 mac mini; matching the generator to the hardware (open, M7-e). Listening sheet 7i: no result yet.
+
