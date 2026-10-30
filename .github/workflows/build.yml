@@ -306,6 +306,8 @@ jobs:
             grep -E "^FAIL" plugtest_$a.txt | head -12 | cut -c1-600 | while IFS= read -r line; do echo "::error::PLUGIN-TEST($a): $line"; done
             echo "::notice::PLUGIN-TEST($a) exit $code: $(grep -E '^(PASS|FAIL): [0-9]+ checks' plugtest_$a.txt)"
             # A step shows at most 10 annotations per level, so pack the lines (70 per annotation, %0A is a newline; the exit line is written first so it is never cut).
+            # Milestone 8 step 2: the restart-timing lines get a notice of their own (the packed INFO notice is cut by GitHub's size limit).
+            echo "::notice title=RESTART-TIMING $a::$(grep -E '^INFO: restart timing' plugtest_$a.txt | cut -c1-260 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
             for kind in INFO PASS; do
               grep -E "^$kind" plugtest_$a.txt | cut -c1-260 | sed 's/%/%25/g' > plugtest_${a}_$kind.txt
               total=$(wc -l < plugtest_${a}_$kind.txt)
