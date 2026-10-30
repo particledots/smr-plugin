@@ -377,7 +377,7 @@ jobs:
           plutil -p dist/Unofficial-SMR/*.component/Contents/Info.plist | grep -E -A12 "AudioComponents|CFBundleIdentifier|CFBundleName|LSMinimumSystemVersion"
           exit $fail
 
-      - name: auval (hard gate: a non-zero exit fails the build)
+      - name: auval (hard gate - a non-zero exit fails the build)
         timeout-minutes: 5
         run: |
           mkdir -p ~/Library/Audio/Plug-Ins/Components
