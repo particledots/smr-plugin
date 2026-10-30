@@ -304,18 +304,18 @@ jobs:
             [ $code -eq 0 ] || fail=1
             echo "::group::plugin tests $a (exit $code)"; cat plugtest_$a.txt; echo "::endgroup::"
             grep -E "^FAIL" plugtest_$a.txt | head -12 | cut -c1-600 | while IFS= read -r line; do echo "::error::PLUGIN-TEST($a): $line"; done
-            # A step shows at most 10 annotations per level, so pack the lines (15 per annotation, %0A is a newline).
+            echo "::notice::PLUGIN-TEST($a) exit $code: $(grep -E '^(PASS|FAIL): [0-9]+ checks' plugtest_$a.txt)"
+            # A step shows at most 10 annotations per level, so pack the lines (70 per annotation, %0A is a newline; the exit line is written first so it is never cut).
             for kind in INFO PASS; do
               grep -E "^$kind" plugtest_$a.txt | cut -c1-260 | sed 's/%/%25/g' > plugtest_${a}_$kind.txt
               total=$(wc -l < plugtest_${a}_$kind.txt)
               part=0
-              while [ $((part*15)) -lt "$total" ]; do
-                msg=$(sed -n "$((part*15+1)),$((part*15+15))p" plugtest_${a}_$kind.txt | awk '{printf "%s%%0A", $0}')
+              while [ $((part*70)) -lt "$total" ]; do
+                msg=$(sed -n "$((part*70+1)),$((part*70+70))p" plugtest_${a}_$kind.txt | awk '{printf "%s%%0A", $0}')
                 echo "::notice title=PLUGIN-TEST $a $kind part $((part+1))::$msg"
                 part=$((part+1))
               done
             done
-            echo "::notice::PLUGIN-TEST($a) exit $code: $(grep -E '^(PASS|FAIL): [0-9]+ checks' plugtest_$a.txt)"
           done
           # Does the x86_64 run give the same samples as the arm64 run? The per-check lines carry sample counts and peaks, not hashes,
           # so compare the PASS/FAIL lines only.
