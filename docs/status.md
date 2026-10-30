@@ -351,3 +351,7 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - Section 2 (forbidden notes reset on load): grey light present before saving; after save, close and reopen, no grey light and counter 0, exactly as expected.
 - Section 3 (1V/oct saved and reloaded): as expected.
 - **Step 5 and 5b ACCEPTED on the Intel Mac.** Step 5 window defect fixed. M1-h now DECIDED and implemented (reset on load).
+
+### M4 mac mini and real SMR (Bryn, 2026-10-29 evening)
+- **M4 mac mini (Tahoe, Logic 11.2), first test of any M6/M7 build:** loaded, looked right on the large screen, resized correctly, no audio glitches, behaved the same as on the Intel Mac, no unexpected CPU spike (about 5 % or less). Bryn did not name the build; the latest at the time was run 40888491959 (commit 52a09b8), so I record it as that, not confirmed. He gave no section-by-section answers, so "behaved the same" is a general statement, not a check of each M6/M7 step.
+- **Real SMR staged-clear timing (M1-c, M2-c), phone/hand timing:** run 1 2.14 s, run 2 2.73 s, run 3 2.8 s, from the last of the six Lock presses to the first flash. All six presses at once were very hard to do with his module set-up, so the start point is uncertain. The lights went out after release (Bryn: "if I am not mistaken").
