@@ -462,3 +462,6 @@ In: "odds" is input slot 1, which feeds channels 1, 3, 5 (`Engine.h processBlock
 4. **M7-f (Lock jack edge timing) stays as it is.** The core follows `dig_inouts.c debounce_trigger_inputs` (flag about 3 ticks after the pin goes back high); manual-versus-source note above unchanged.
 
 Still open, unchanged: M1-c and M2-c (placeholders 3 s and 12 kHz kept; real SMR 2.14, 2.73, 2.8 s). M1-h is decided (forbidden notes reset on load).
+
+## Manual against itself (found 2026-10-29, starter-patch doc)
+- **M8-a "Deep blue bank" for re-mixing.** The manual's re-mix patch (p. 6) says to select "the deep blue bank" because its scales are common graphic-EQ frequencies. The manual's bank table (back page) puts "296 EQ Frequencies" under the Green group, Bank 6, and gives the Blue group as equal-temperament scales. The colour name and the table do not obviously agree, and the source has not been read for it. The plugin's Bank box is named by group and number ("Blue 1" to "White (custom)"). No change made. Optional check: on the real SMR, hold ROTATE and turn it to see which bank shows deep blue. Not needed for v0.1.
