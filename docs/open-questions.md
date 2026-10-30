@@ -140,7 +140,7 @@ Q1 to Q5 (licensing), v5 feature scope and Freq as MIDI or parameter are still u
   unknown. Decide whether Phase 1 emulates them. Needs datasheet and capture.
 - **M1-m Output labelling.** Channels 1,3,5 leave by the EVENS OUT jack. Decide how the plugin's
   left and right outputs map to these.
-  **DEFERRED to Milestone 8 (Bryn, 2026-10-29).**
+  **DEFERRED to Milestone 8 (Bryn, 2026-10-29). DECIDED (Bryn, 2026-10-29 night): follow the source.** Host left is `filtered_buffer` (channels 2, 4, 6), host right is `filtered_bufferR` (channels 1, 3, 5), as the port already does. No change.
 - **M1-n Input level and noise source.** Plugin 0 dBFS versus module volts is undecided. The clip LED
   level (`INPUT_LED_CLIP_LEVEL` 0x58000000) and the manual's 9.6 V imply about 13.96 V full scale
   (**derived**). The noise source is the STM32 DAC noise generator (`dac.c`); its spectrum needs a
@@ -262,6 +262,7 @@ Numbers are from CI run 40452093561 (commit 9e18c5d); method in tools/analysis/R
 
 - **M3-a Output mapping, hardware against manual and source.** Manual ("Controls and Jacks") and source (`filter.c`, docs/architecture.md 3.1): channels 1,3,5 leave by the EVENS OUT jack. Measured: with only slider 1 up the signal is on the ODDS OUT jack (-26.4 dBFS rms against -92.4 on the evens jack); with only slider 2 up it is on the EVENS OUT jack (-28.8 against -92.8). Assumes SMR OUT odds to Scarlett input 1 and OUT evens to input 2, and Logic tracks on those inputs (Bryn confirmed both). Not yet explained: the hardware may differ from the manual and source, or slider numbering may differ from channel numbering. The port still follows the source (M1-m). **Decision needed**, and a one-line check by Bryn (is the slider that was up the leftmost one?) would help.
   - **DEFERRED to Milestone 8 (Bryn, 2026-10-29).** The port keeps following the source until then (M1-m).
+  - **DECIDED (Bryn, 2026-10-29 night): follow the source.** Bryn cannot recall which slider was up in the early capture, so the hardware mismatch stays unexplained and recorded here. The port is unchanged.
 - **M3-b The impulses in `smr_sig_main.wav` are unusable.** Their rings are below the SMR's own noise floor (about -60 dBFS at Q max). The analysis uses the steady noise instead (H = output / input). Nothing to decide; a future capture could use a louder or longer excitation if impulses are wanted.
 - **M3-c Q min has no distinct per-channel peaks.** The six Q min bands overlap. Comparing the port at Q min must use the whole response, not per-resonance numbers.
 - **M3-d Tolerance consequence.** The noise steps cannot check a 0.5 dB gain tolerance: each step is uncertain by 0.08 to 1.8 dB (1 sigma). Proposal: apply the 0.5 dB gain tolerance to the peak gain and shape of H(f) (P3b, P3c, P4, and the whole Q min response), where the same input drives hardware and port. The 1 cent and 10% tolerances stay as agreed until the comparison shows whether they are realistic. **To be agreed.**

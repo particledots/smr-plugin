@@ -377,8 +377,7 @@ jobs:
           plutil -p dist/Unofficial-SMR/*.component/Contents/Info.plist | grep -E -A12 "AudioComponents|CFBundleIdentifier|CFBundleName|LSMinimumSystemVersion"
           exit $fail
 
-      - name: auval (informational only; does not fail the build)
-        continue-on-error: true
+      - name: auval (hard gate: a non-zero exit fails the build)
         timeout-minutes: 5
         run: |
           mkdir -p ~/Library/Audio/Plug-Ins/Components
@@ -390,13 +389,14 @@ jobs:
           auval -v aufx Smru Ptdt > auval_log.txt 2>&1; code=$?
           cat auval_log.txt
           tail -4 auval_log.txt | tr '\n' ' ' > auval_tail.txt
-          # continue-on-error hides the result from the run's status, so state it as an annotation.
+          # Hard gate (Milestone 8 step 2 b): any non-zero exit fails this step and so the build. The tail is also written as an annotation.
           if [ $code -eq 0 ]; then
             echo "::notice::AUVAL exit 0: $(cat auval_tail.txt)"
           else
-            echo "::warning::AUVAL exit $code: $(cat auval_tail.txt)"
+            echo "::error::AUVAL exit $code: $(cat auval_tail.txt)"
+            grep -E "FAIL|ERROR|error" auval_log.txt | head -8 | cut -c1-300 | while IFS= read -r line; do echo "::error::AUVAL: $line"; done
           fi
-          exit 0
+          exit $code
 
       - name: Zip for download
         run: |
