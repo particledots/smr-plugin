@@ -389,3 +389,6 @@ Decisions (Bryn): M5-d accept CI plus Logic default match; M5-e keep the flush; 
 - What is NOT proven: how these controls sound in Logic, and how the window's Lock, Freq and bank controls behave when listened to. Not tested on the M4 mac mini. The Pre/Post manual question (M7-m) is not checked on the real SMR.
 - Open for later, in short pieces if wanted: the sections above. The "triggers sent/seen" line stays until Bryn says otherwise.
 
+### Milestone 8 plan decision (Bryn, 2026-10-29 evening)
+- Final test pass on both Macs: Bryn chose normal use in his own work for a few days, reporting any glitch, crash or oddity, instead of a scheduled long Logic session. No many-instance stress test on his side. The automated stress tests (random control moves, extreme values, all banks and switches, several host rates and block sizes, mono and stereo, invalid numbers and timing per block) stay in CI. His CPU reading on the Intel Mac is still wanted once, during normal use.
+
