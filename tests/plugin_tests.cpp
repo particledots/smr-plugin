@@ -916,6 +916,12 @@ namespace
         double wallSeconds = 0.0, audioSeconds = 0.0;
         double worstBlockRatio = 0.0;   // worst (time to process a block) / (length of that block), blocks of 64 samples or more
         int stateSaves = 0, stateLoads = 0;
+        // Milestone 8 step 2 (information only): the same timing split by kind of block. "restart" = the first block after
+        // setStateInformation (PluginProcessor.cpp processBlock calls restart() there). "first" = block 1 after prepareToPlay.
+        // "other" = every remaining block. Ratios use blocks of 64 samples or more; microseconds use every block.
+        double worstOtherRatio = 0.0, worstRestartRatio = 0.0, worstFirstRatio = 0.0;
+        double worstOtherUs = 0.0, worstRestartUs = 0.0, firstUs = 0.0;
+        int restartBlocks = 0, otherBlocks = 0, slowOther = 0, slowRestart = 0;   // slow = took longer than the block's own length (ratio > 1)
     };
 
     // blockMode 0: blocks of 64. 1: blocks of 512. 2: random block length 1..2048 on every block.
@@ -940,6 +946,7 @@ namespace
         juce::MemoryBlock saved;
         bool haveSaved = false;
         int blockNo = 0, mode = 0;
+        bool afterLoad = false;
         size_t segLeft = 0, sqCount = 0;
         const size_t total = (size_t) rate * 3;   // 3 s of audio per run
         size_t done = 0;
@@ -965,7 +972,8 @@ namespace
 
             // Saved state while running.
             if (blockNo % 40 == 0) { saved.setSize (0); p.getStateInformation (saved); haveSaved = true; ++r.stateSaves; }
-            if (blockNo % 97 == 0 && haveSaved) { p.setStateInformation (saved.getData(), (int) saved.getSize()); ++r.stateLoads; }
+            afterLoad = false;
+            if (blockNo % 97 == 0 && haveSaved) { p.setStateInformation (saved.getData(), (int) saved.getSize()); ++r.stateLoads; afterLoad = true; }
 
             // Input: a new kind of signal about every quarter second.
             if (segLeft == 0) { mode = rng.range (6); segLeft = (size_t) rate / 4; }
@@ -998,6 +1006,13 @@ namespace
             r.wallSeconds += dt;
             r.audioSeconds += (double) n / (double) rate;
             if (n >= 64) r.worstBlockRatio = std::max (r.worstBlockRatio, dt / ((double) n / (double) rate));
+            {
+                const double ratio = n >= 64 ? dt / ((double) n / (double) rate) : 0.0;
+                const double us = dt * 1.0e6;
+                if (afterLoad)       { ++r.restartBlocks; r.worstRestartRatio = std::max (r.worstRestartRatio, ratio); r.worstRestartUs = std::max (r.worstRestartUs, us); if (ratio > 1.0) ++r.slowRestart; }
+                else if (blockNo == 1) { r.worstFirstRatio = ratio; r.firstUs = us; }
+                else                 { ++r.otherBlocks; r.worstOtherRatio = std::max (r.worstOtherRatio, ratio); r.worstOtherUs = std::max (r.worstOtherUs, us); if (ratio > 1.0) ++r.slowOther; }
+            }
 
             for (int c = 0; c < nOut; ++c)
             {
@@ -1046,6 +1061,27 @@ namespace
                 std::snprintf (name, sizeof name, "stress CPU: %d Hz, %d in %d out (this runner, not a user's Mac)", rate, nIn, nOut);
                 std::snprintf (det, sizeof det, "faster than real time by %.1f times (one core %.1f %%), worst block of 64 or more samples took %.1f %% (64), %.1f %% (512), %.1f %% (random) of its length",
                                rtf, rtf > 0.0 ? 100.0 / rtf : 0.0, 100.0 * res[0].worstBlockRatio, 100.0 * res[1].worstBlockRatio, 100.0 * res[2].worstBlockRatio);
+                info (name, det);
+
+                // Milestone 8 step 2: the same blocks split by kind (information only, nothing is decided from it).
+                double wRr = 0.0, wOr = 0.0, wFr = 0.0, wRu = 0.0, wOu = 0.0, wFu = 0.0;
+                int nR = 0, nO = 0, sR = 0, sO = 0;
+                for (int m = 0; m < 3; ++m)
+                {
+                    wRr = std::max (wRr, res[m].worstRestartRatio); wOr = std::max (wOr, res[m].worstOtherRatio); wFr = std::max (wFr, res[m].worstFirstRatio);
+                    wRu = std::max (wRu, res[m].worstRestartUs);    wOu = std::max (wOu, res[m].worstOtherUs);    wFu = std::max (wFu, res[m].firstUs);
+                    nR += res[m].restartBlocks; nO += res[m].otherBlocks; sR += res[m].slowRestart; sO += res[m].slowOther;
+                }
+#if defined(__aarch64__)
+                const char* arch = "arm64";
+#elif defined(__x86_64__)
+                const char* arch = "x86_64";
+#else
+                const char* arch = "other";
+#endif
+                std::snprintf (name, sizeof name, "restart timing %s %d Hz %din%dout", arch, rate, nIn, nOut);
+                std::snprintf (det, sizeof det, "restart blocks %d worst %.0f us (%.0f %%, %d over 100 %%); others %d worst %.0f us (%.0f %%, %d over); first %.0f us (%.0f %%)",
+                               nR, wRu, 100.0 * wRr, sR, nO, wOu, 100.0 * wOr, sO, wFu, 100.0 * wFr);
                 info (name, det);
             }
     }
