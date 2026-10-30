@@ -63,7 +63,7 @@ Manual: Rotation, Spread, Freq Nudge, Scale and Bank do not change when a channe
 Plugin list: Blue 1 to 6, Pink 1 to 3, Orange 1 to 4, Green 1 to 6, White (custom): 20 banks.
 Manual (Scale Banks and Groups): Blue 6 banks (Major, Minor, Single Western Intervals, Western Triads, Chromatic, Whole Step ET); Pink 3 (Single Intervals, Western Triads, Whole Step, all Just Intonation); Orange 4 (Indian Pentatonic, Indian Shrutis, Mesopotamian, Gamelan Pelog); Green 6 (Alpha, Alpha more notes, Gamma, 17 notes, Bohlen-Pierce, 296 EQ); White 1 (custom).
 1. Open the Bank list. I expect 20 entries in that group order. Tell me if the count or the group sizes differ.
-2. Choose Blue 1, then Pink 1, Orange 1, Green 1, White. I expect the Env Out light colours to change per group (blue, pink, orange, green, white). Tell me the colours you see.
+2. Choose Blue 1, then Pink 1, Orange 1, Green 1, White. The plugin has no bank-group colour lights on the Env Outs (your decision, 2026-10-29), so manual p.24's colour change and bank flash are NOT built; do not expect them. Tell me only whether each choice changes the sound.
 
 ## Report
 Per number: what you heard or saw, and where it differs from "I expect". Say the Mac and build run.
