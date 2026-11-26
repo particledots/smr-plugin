@@ -106,6 +106,15 @@ FetchContent_Declare(JUCE
   GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(JUCE)
 
+# --- The window's fonts, built into the plugin so every Mac (and the panel checks) draws and measures the same. SIL OFL 1.1. ---
+juce_add_binary_data(SmrFonts
+  HEADER_NAME SmrFontData.h
+  NAMESPACE   SmrFontData
+  SOURCES
+    src/plugin/Fonts/SpaceGrotesk-Regular.ttf
+    src/plugin/Fonts/SpaceGrotesk-Medium.ttf
+    src/plugin/Fonts/Marcellus-Regular.ttf)
+
 # --- src/plugin: the AU and VST3 ---
 juce_add_plugin(SMR
   COMPANY_NAME "particledots"
@@ -127,6 +136,7 @@ target_compile_definitions(SMR PRIVATE
   JUCE_USE_CURL=0
   JUCE_VST3_CAN_REPLACE_VST2=0)
 target_link_libraries(SMR PRIVATE
+  SmrFonts
   smr_params
   smr_host
   smr_core
@@ -147,6 +157,7 @@ target_compile_definitions(smr_plugin_tests PRIVATE
   JUCE_USE_CURL=0
   JucePlugin_Name="Unofficial SMR")
 target_link_libraries(smr_plugin_tests PRIVATE
+  SmrFonts
   smr_params
   smr_host
   smr_core

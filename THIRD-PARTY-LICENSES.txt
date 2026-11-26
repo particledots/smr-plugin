@@ -65,3 +65,17 @@ version 3, copyright (c) 2026 particledots. The full text is in the file LICENSE
 (shipped as LICENSE-AGPL-3.0.txt next to this file). The complete source of every
 build is at https://github.com/particledots/smr-plugin . The MIT-licensed firmware
 code in section 1 may be combined into this AGPL work; its notice stays as above.
+
+
+4. Fonts (the plugin window)
+----------------------------
+
+The window's text uses two fonts built into the plugin, both under the SIL Open
+Font License 1.1 (full texts in the licenses folder, OFL-SpaceGrotesk.txt and
+OFL-Marcellus.txt):
+
+    Space Grotesk   - the window's text
+    Marcellus       - the title
+
+The look of the window (colours, drawing of knobs, switches and frames) follows
+the Anamnesis plugin by the same author.

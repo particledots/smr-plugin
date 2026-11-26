@@ -8,6 +8,11 @@
 //       Differences therefore come from the JUCE layer, the denormal flush, mono handling, chunking or saved state.
 //       Every check prints one line starting PASS:, FAIL: or INFO:. Exit code 0 only if no check failed.
 //
+//   smr_plugin_tests panel OUTDIR [notiming]
+//       The window's look: draws the window headless at five sizes, checks it (title inside its area in the drawn pixels, every text
+//       fits its room, the fixed artwork is a stored picture, the live update is lighter than drawing the whole window) and writes
+//       pictures into OUTDIR. "notiming" skips the two drawing-cost checks. Same PASS:, FAIL:, INFO: lines and exit code.
+//
 //   smr_plugin_tests IN.wav OUT.wav [--pot 0=V] [--gain-db X] [--chan CH=BANK,SCALE,NOTE] [--trackoffset 0=V] [--script FILE]
 //                                   [--set ID=VALUE] [--tail SECONDS] [--block N]
 //       Renders IN.wav through the plugin (host rate = file rate, stereo out) and writes a 32-bit float stereo WAV, left =
@@ -32,7 +37,9 @@
 #include "BlockAdapter.h"
 #include "display_checks.h"
 #include "ParamMap.h"
+#include "PluginEditor.h"
 #include "PluginProcessor.h"
+#include "SmrStyle.h"
 #include "StateCodec.h"
 #include "Tables.h"
 #include "wav.h"
@@ -1287,13 +1294,228 @@ namespace
         std::printf ("  audio saturation events n/a (not visible through the plugin interface), input gain %.2f dB, Q count %d, odds ADC count %d\n", gainDb, q, trackoffset);
         return 0;
     }
+
+    // ------------------------------------------------------------------------------------------------------------
+    // The window's look ("gold sections"): drawn headless, checked, and photographed. Nothing here touches the sound.
+    // Run as: smr_plugin_tests panel OUTDIR [notiming]. Docs: docs/testing-look.md.
+    struct PanelSetup
+    {
+        std::unique_ptr<TestProc> proc;
+
+        // A plugin that has run a little audio (so the lights show something) with some controls moved, as in the approved mock-up.
+        explicit PanelSetup (bool running)
+            : proc (new TestProc())
+        {
+            setLayout (*proc, 2, 2);
+            proc->setRateAndBufferSizeDetails (48000.0, 512);
+            proc->prepareToPlay (48000.0, 512);
+            if (! running) return;
+            auto setp = [this] (const char* id, float real)
+            {
+                auto* pp = proc->parameters().getParameter (id);
+                pp->setValueNotifyingHost (pp->convertTo0to1 (real));
+            };
+            const float lv[6] = { 0.82f, 0.64f, 1.0f, 0.45f, 0.72f, 0.30f };
+            const char* ids[6] = { "level1", "level2", "level3", "level4", "level5", "level6" };
+            for (int i = 0; i < 6; ++i) setp (ids[i], lv[i]);
+            setp ("noise", 1.0f);
+            setp ("lock2", 1.0f);
+            setp ("lock5", 1.0f);
+            juce::AudioBuffer<float> buf (2, 512);
+            juce::MidiBuffer midi;
+            for (int b = 0; b < 120; ++b)
+            {
+                buf.clear();
+                for (int k = 0; k < 512; ++k)
+                {
+                    const float v = 0.5f * std::sin (2.0f * 3.14159265f * 220.0f * (float) (b * 512 + k) / 48000.0f);
+                    buf.setSample (0, k, v);
+                    buf.setSample (1, k, v);
+                }
+                proc->processBlock (buf, midi);
+            }
+        }
+    };
+
+    bool writePng (const juce::Image& image, const juce::File& file)
+    {
+        juce::PNGImageFormat png;
+        file.deleteFile();
+        juce::FileOutputStream out (file);
+        if (! out.openedOk()) return false;
+        return png.writeImageToStream (image, out);
+    }
+
+    int panelChecks (const char* outDirPath, bool timing)
+    {
+        const juce::File outDir = juce::File::getCurrentWorkingDirectory().getChildFile (outDirPath);
+        outDir.createDirectory();
+        const int widths[5] = { 600, 800, 1000, 1300, 1600 };
+        auto heightFor = [] (int w) { return juce::roundToInt ((float) w * (float) smrui::canvasH / (float) smrui::canvasW); };
+
+        // The title fits its area, measured with the window's own font.
+        const float tw = smrui::titleWidth();
+        check (tw > 60.0f && tw <= smrui::titleRight - smrui::titleLeft, "panel: the title fits its area (measured with its font)",
+               fmt ("%.1f of %.0f canvas units", tw, (double) (smrui::titleRight - smrui::titleLeft)));
+
+        // Five window sizes: the size is right, the window draws, and the title is inside its area in the drawn pixels.
+        for (int w : widths)
+        {
+            PanelSetup setup (false);
+            std::unique_ptr<juce::AudioProcessorEditor> ed (setup.proc->createEditor());
+            if (ed == nullptr) { check (false, "panel: the editor opens"); return 1; }
+            ed->setSize (w, heightFor (w));
+            const float s = (float) w / (float) smrui::canvasW;
+            check (ed->getWidth() == w && ed->getHeight() == heightFor (w), fmt ("panel %.0f: window size", (double) w), fmt ("%.0f x %.0f", ed->getWidth(), ed->getHeight()));
+            const auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            check (img.isValid() && img.getWidth() == w, fmt ("panel %.0f: the window draws", (double) w));
+            int spill = 0, inside = 0;
+            for (int y = (int) (10 * s); y < (int) (44 * s); ++y)
+            {
+                for (int x = (int) std::ceil (smrui::titleLeft * s); x < (int) (smrui::titleRight * s); ++x)
+                    if (img.getPixelAt (x, y).getBrightness() > 0.6f) ++inside;
+                for (int x = (int) std::ceil ((smrui::ornamentLeftEnd + 1.5f) * s); x < (int) ((smrui::titleLeft - 0.5f) * s); ++x)
+                    if (img.getPixelAt (x, y).getBrightness() > 0.6f) ++spill;
+                for (int x = (int) std::ceil ((smrui::titleRight + 0.5f) * s); x < (int) ((smrui::ornamentRightStart - 1.5f) * s); ++x)
+                    if (img.getPixelAt (x, y).getBrightness() > 0.6f) ++spill;
+            }
+            check (inside > 60 && spill == 0, fmt ("panel %.0f: the title is drawn inside its area", (double) w),
+                   fmt ("%.0f lit pixels inside, %.0f in the gaps beside it", (double) inside, (double) spill));
+        }
+
+        // Every text fits its room (logged while a fresh window draws once).
+        {
+            std::vector<smrui::TextFit> log;
+            smrui::fitLog() = &log;
+            PanelSetup setup (false);
+            std::unique_ptr<juce::AudioProcessorEditor> ed (setup.proc->createEditor());
+            ed->setSize (1000, heightFor (1000));
+            const auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            smrui::fitLog() = nullptr;
+            int bad = 0;
+            float tightest = 1.0e9f;
+            std::string tightText;
+            for (const auto& t : log)
+            {
+                if (t.width > t.room + 0.5f) { ++bad; check (false, "panel text fits: " + t.text.toStdString(), fmt ("needs %.1f, room %.1f", (double) t.width, (double) t.room)); }
+                if (t.room - t.width < tightest) { tightest = t.room - t.width; tightText = t.text.toStdString(); }
+            }
+            check (log.size() > 60 && bad == 0 && img.isValid(), "panel: every text fits its room", fmt ("%.0f texts measured, %.0f too wide", (double) log.size(), (double) bad));
+            info ("panel: the tightest text", tightText + fmt (" has %.1f units to spare", (double) tightest));
+        }
+
+        // Texts that change while the window is open: the drag read-out (widest at the longest parameter name), the status lines,
+        // the Bank names in the pop-up.
+        {
+            float widest = 0.0f;
+            std::string name;
+            for (int i = 0; i < smr_plugin::kNumParams; ++i)
+                for (float v : { smr_plugin::paramMin (i), smr_plugin::paramMax (i) })
+                {
+                    const juce::String t = juce::String (smr_plugin::spec (i).name) + "   " + juce::String (smr_plugin::formatValue (i, v));
+                    const float w = smrui::textWidth (t, 12.0f);
+                    if (w > widest) { widest = w; name = t.toStdString(); }
+                }
+            check (widest <= 770.0f, "panel: the drag read-out fits for every parameter", fmt ("widest %.1f of 770: ", (double) widest) + name);
+            const float st = smrui::textWidth ("Host rate 44101 Hz is not supported: audio passes through unchanged.", 11.0f);
+            check (st <= 940.0f, "panel: the longest status line fits", fmt ("%.1f of 940", (double) st));
+            const float dg = smrui::textWidth ("triggers sent/seen:   Rot CW 9999/9999   Rot CCW 9999/9999   Scale up 9999/9999   Scale down 9999/9999   Lock 135 9999/9999   Lock 246 9999/9999   Rot press 9999/9999", 10.0f);
+            check (dg <= 940.0f, "panel: the trigger line fits with four-digit counts", fmt ("%.1f of 940", (double) dg));
+            float bankW = 0.0f;
+            SmrAudioProcessor bankProc;
+            if (auto* ch = dynamic_cast<juce::AudioParameterChoice*> (bankProc.parameters().getParameter ("bank")))
+                for (const auto& b : ch->choices) bankW = std::max (bankW, smrui::textWidth (b.toUpperCase(), smrui::labelSize, smrui::labelSpacing));
+            check (bankW > 20.0f && bankW <= 224.0f - 28.0f - 16.0f, "panel: every Bank name fits the Bank pop-up", fmt ("widest %.1f of 180", (double) bankW));
+        }
+
+        // The fixed artwork is a stored picture; the live areas are small next to the whole window.
+        {
+            PanelSetup setup (true);
+            std::unique_ptr<juce::AudioProcessorEditor> edBase (setup.proc->createEditor());
+            auto* ed = dynamic_cast<SmrAudioProcessorEditor*> (edBase.get());
+            check (ed != nullptr, "panel: the editor is the SMR editor");
+            if (ed == nullptr) return 1;
+            check (ed->getBackdrop().getCachedComponentImage() != nullptr, "panel: the fixed artwork is stored as a picture");
+            double liveArea = 0.0;
+            for (const auto& a : SmrAudioProcessorEditor::liveAreas()) liveArea += (double) a.getWidth() * (double) a.getHeight();
+            info ("panel: the live areas cover", fmt ("%.1f percent of the window", 100.0 * liveArea / ((double) smrui::canvasW * smrui::canvasH)));
+
+            if (timing)
+                for (int w : { 1000, 1600 })
+                {
+                    ed->setSize (w, heightFor (w));
+                    const float s = (float) w / (float) smrui::canvasW;
+                    juce::Image img (juce::Image::ARGB, ed->getWidth(), ed->getHeight(), true);
+                    juce::RectangleList<int> live;
+                    for (const auto& a : SmrAudioProcessorEditor::liveAreas())
+                        live.add (a.toFloat().transformedBy (juce::AffineTransform::scale (s)).getSmallestIntegerContainer());
+                    auto timeIt = [&] (bool liveOnly, int n)
+                    {
+                        const auto t0 = std::chrono::steady_clock::now();
+                        for (int i = 0; i < n; ++i)
+                        {
+                            juce::Graphics g (img);
+                            if (liveOnly) g.reduceClipRegion (live);
+                            ed->paintEntireComponent (g, true);
+                        }
+                        return std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count() / n;
+                    };
+                    auto& backdrop = ed->getBackdrop();
+                    backdrop.setBufferedToImage (false);
+                    timeIt (false, 3);
+                    const double whole = timeIt (false, 20);
+                    backdrop.setBufferedToImage (true);
+                    timeIt (true, 3);
+                    const double tick = timeIt (true, 60);
+                    info (fmt ("panel drawing at %.0f wide", (double) w), fmt ("live update %.2f ms, whole window every time %.2f ms", tick, whole));
+                    check (tick < 0.6 * whole, fmt ("panel %.0f: the live update is much lighter than drawing the whole window", (double) w),
+                           fmt ("%.2f ms against %.2f ms", tick, whole));
+                    check (tick < 6.0, fmt ("panel %.0f: the live update takes under 6 ms (30 updates a second)", (double) w), fmt ("%.2f ms", tick));
+                }
+            else
+                info ("panel: drawing-cost checks skipped (notiming)");
+        }
+
+        // Pictures. The first has no audio yet; the others have run audio with the Noise switch on, two Locks lit and the levels moved.
+        {
+            PanelSetup setup (false);
+            std::unique_ptr<juce::AudioProcessorEditor> ed (setup.proc->createEditor());
+            ed->setSize (1000, heightFor (1000));
+            check (writePng (ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f), outDir.getChildFile ("panel-first-load-1000.png")), "panel: picture panel-first-load-1000.png written");
+        }
+        for (int w : widths)
+        {
+            PanelSetup setup (true);
+            std::unique_ptr<juce::AudioProcessorEditor> ed (setup.proc->createEditor());
+            ed->setSize (w, heightFor (w));
+            const juce::String name = "panel-running-" + juce::String (w) + ".png";
+            check (writePng (ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f), outDir.getChildFile (name)), "panel: picture " + name.toStdString() + " written");
+        }
+        {
+            // The two single-channel positions (1 ONLY, 6 ONLY), the fourth envelope position (1V/oct) and Pre
+            PanelSetup setup (true);
+            auto setp = [&setup] (const char* id, float real)
+            {
+                auto* pp = setup.proc->parameters().getParameter (id);
+                pp->setValueNotifyingHost (pp->convertTo0to1 (real));
+            };
+            setp ("oddsmode", 1.0f); setp ("evensmode", 1.0f); setp ("envspeed", 3.0f); setp ("prepost", 1.0f);
+            std::unique_ptr<juce::AudioProcessorEditor> ed (setup.proc->createEditor());
+            ed->setSize (1000, heightFor (1000));
+            check (writePng (ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f), outDir.getChildFile ("panel-one-channel-1V-oct-1000.png")), "panel: picture panel-one-channel-1V-oct-1000.png written");
+        }
+        std::printf ("%s: %d checks, %d failed\n", failures == 0 ? "PASS" : "FAIL", checks, failures);
+        return failures == 0 ? 0 : 1;
+    }
+
 }
 
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
     if (argc >= 2 && std::strcmp (argv[1], "selftest") == 0) return selftest();
+    if (argc >= 3 && std::strcmp (argv[1], "panel") == 0) return panelChecks (argv[2], ! (argc >= 4 && std::strcmp (argv[3], "notiming") == 0));
     if (argc >= 3 && std::strstr (argv[1], ".wav") != nullptr) return render (argc, argv);
-    std::fputs ("usage: smr_plugin_tests selftest\n       smr_plugin_tests IN.wav OUT.wav [--pot 0=V] [--gain-db X] [--chan CH=B,S,N] [--trackoffset 0=V] [--script FILE] [--set ID=V] [--tail S] [--block N]\n", stderr);
+    std::fputs ("usage: smr_plugin_tests selftest\n       smr_plugin_tests panel OUTDIR [notiming]\n       smr_plugin_tests IN.wav OUT.wav [--pot 0=V] [--gain-db X] [--chan CH=B,S,N] [--trackoffset 0=V] [--script FILE] [--set ID=V] [--tail S] [--block N]\n", stderr);
     return 2;
 }
