@@ -19,6 +19,8 @@ page of this repository.
 - Loading in Logic was confirmed on an Intel Mac (macOS 12.7.8, Logic Pro 10.7.8) and an M4 Mac
   mini (macOS Tahoe, Logic Pro 11.2) for the first pass-through build. Later features were
   checked mainly on the Intel Mac. The full pass on the M4 Mac mini is still to do.
+- The rename to "Spectral Harmonic Rotator" (v0.0.5) was tested on the Intel Mac on 2026-11-26: a
+  project saved with "Unofficial SMR" reopened with its settings, and the new name showed in Logic.
 - The VST3 builds and passes the CI checks, but has not been tried in any host. Logic loads AU only.
 - Details, test results and open decisions: `docs/status.md` and `docs/open-questions.md`.
 
