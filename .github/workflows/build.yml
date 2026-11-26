@@ -429,7 +429,8 @@ jobs:
           [ "$typ/$sub/$man" = "aufx/Smru/Ptdt" ] || { echo "::error::RENAME AU codes are '$typ/$sub/$man', expected aufx/Smru/Ptdt"; fail=1; }
           [ "$bid" = "com.particledots.SMR" ] || { echo "::error::RENAME bundle ID is '$bid', expected com.particledots.SMR"; fail=1; }
           mi="$vst/Contents/Resources/moduleinfo.json"
-          cid=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(" ".join(c["CID"].replace("-","").upper()+"|"+c["Name"] for c in d["Classes"]))' "$mi" 2>&1 || true)
+          cid=$(python3 -c 'import json,re,sys; d=json.loads(re.sub(r",(\s*[}\]])", r"\1", open(sys.argv[1]).read())); print(" ".join(c["CID"].replace("-","").upper()+"|"+c["Name"] for c in d["Classes"]))' "$mi" 2>&1 || true)
+          cat "$mi" || true
           echo "VST3 classes: $cid"
           case "$cid" in *"ABCDEF019182FAEB50746474536D7275|Spectral Harmonic Rotator"*) ;; *) echo "::error::RENAME VST3 component class is not ABCDEF019182FAEB50746474536D7275 named Spectral Harmonic Rotator: $cid"; fail=1;; esac
           if grep -rIl "Unofficial SMR" dist/Spectral-Harmonic-Rotator --exclude=INSTALL.txt --exclude=THIRD-PARTY-LICENSES.txt --exclude="*.command" | grep -q .; then
