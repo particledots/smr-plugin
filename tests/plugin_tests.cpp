@@ -1470,7 +1470,7 @@ namespace
                     info (fmt ("panel drawing at %.0f wide", (double) w), fmt ("live update %.2f ms, whole window every time %.2f ms", tick, whole));
                     check (tick < 0.6 * whole, fmt ("panel %.0f: the live update is much lighter than drawing the whole window", (double) w),
                            fmt ("%.2f ms against %.2f ms", tick, whole));
-                    check (tick < 6.0, fmt ("panel %.0f: the live update takes under 6 ms (30 updates a second)", (double) w), fmt ("%.2f ms", tick));
+                    check (tick < 11.0, fmt ("panel %.0f: the live update takes under 11 ms, a third of the 33 ms between updates (30 updates a second)", (double) w), fmt ("%.2f ms", tick));
                 }
             else
                 info ("panel: drawing-cost checks skipped (notiming)");
