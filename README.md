@@ -1,4 +1,7 @@
-# Unofficial SMR
+# Spectral Harmonic Rotator
+
+(Formerly "Unofficial SMR". Renamed in v0.0.5; the plugin codes and saved settings are unchanged, so
+projects saved with the old name still open.)
 
 A faithful Audio Unit (AU) and VST3 port of the open-source Spectral Multiband Resonator
 firmware (v5.1.1, commit `79bc953`), for Logic Pro on macOS. Phase 1 is exact fidelity to the
@@ -21,7 +24,7 @@ page of this repository.
 
 ## What it is
 
-- Effect plugin, name "Unofficial SMR", manufacturer "particledots".
+- Effect plugin, name "Spectral Harmonic Rotator", manufacturer "particledots".
 - Channel layouts: mono in to mono or stereo out, stereo in to stereo out.
 - Host sample rates: tested at 44.1, 48, 96 and 192 kHz. The firmware runs at about 96 kHz, so
   the plugin resamples. Other rates may be passed through unchanged; the window says so.
@@ -56,19 +59,26 @@ v0.1 is not released yet. Until it is, builds come from GitHub Actions. This ins
 
 1. Open https://github.com/particledots/smr-plugin/actions and sign in to GitHub.
 2. Click the newest run of "Build plugin (macOS)" with a green tick. If it is red, install nothing.
-3. Under Artifacts at the bottom, click `Unofficial-SMR-macOS`. A zip lands in Downloads.
+3. Under Artifacts at the bottom, click `Spectral-Harmonic-Rotator-macOS`. A zip lands in Downloads.
 4. Unzip it, then unzip the zip inside it (double-click each).
-5. In the `Unofficial-SMR` folder, double-click `Install-Unofficial-SMR.command`. If macOS
+5. In the `Spectral-Harmonic-Rotator` folder, double-click `Install-Spectral-Harmonic-Rotator.command`. If macOS
    refuses to open it, right-click it, choose Open, then Open. Enter your Mac password when asked.
-6. Open Logic Pro. In the Plug-in Manager choose Reset & Rescan Selection. "Unofficial SMR" is
-   listed under "particledots".
+6. Open Logic Pro. In the Plug-in Manager choose Reset & Rescan Selection. "Spectral Harmonic Rotator" is
+   listed under "particledots". The installer also removes any copy under the old name, "Unofficial SMR".
 
 The Terminal route, which also installs the VST3, is in `docs/INSTALL.txt` (also inside the download).
 The build is ad-hoc signed, not notarised by Apple; the installer clears the quarantine flag.
 
 To remove the AU:
 
-    sudo rm -rf "/Library/Audio/Plug-Ins/Components/Unofficial SMR.component"
+    sudo rm -rf "/Library/Audio/Plug-Ins/Components/Spectral Harmonic Rotator.component"
+
+## Plugin identity (unchanged by the rename)
+
+- AU: type `aufx`, subtype `Smru`, manufacturer `Ptdt`. Bundle ID `com.particledots.SMR`.
+- VST3 class ID: `ABCDEF019182FAEB50746474536D7275`, made by JUCE from the two codes only
+  (`JUCE_VST3_CAN_REPLACE_VST2=0`), not from the name.
+- Saved state: XML with root tag `SMR`. The name is not stored in it.
 
 ## Layout
 
@@ -85,7 +95,7 @@ To remove the AU:
 
 ## Licences
 
-- **Unofficial SMR as a whole is licensed under the GNU Affero General Public Licence version 3**
+- **Spectral Harmonic Rotator as a whole is licensed under the GNU Affero General Public Licence version 3**
   (`LICENSE`). Copyright (c) 2026 particledots. The source for any build is this repository.
 - **Firmware-derived code** (the ported DSP in `src/core`, the coefficient tables) comes from the
   Spectral Multiband Resonator firmware, MIT licence, copyright (c) 2015 Dan Green; some files
@@ -97,5 +107,7 @@ To remove the AU:
   Commons BY-NC-SA licence. No hardware design files are used. The window's layout follows the
   module's panel; this plugin is free and non-commercial, and uses no logo or maker name. That is
   a statement of intent, not legal clearance.
-- The names "SMR" and "Spectral Multiband Resonator" are used as the firmware's guidelines for
-  derivative works allow. Nothing here is an official product.
+- **Name.** "Spectral Harmonic Rotator" is this plugin's own name. The firmware's guidelines for
+  derivative works (`third_party/SMR/README.md`) bar only the text "4ms" or "4ms Company" and the
+  4ms logo; "SMR" and "Spectral Multiband Resonator" are allowed but not required. The plugin's
+  name and window use neither the 4ms text nor the logo. Nothing here is an official product.

@@ -1,4 +1,4 @@
-// smr_render: offline renderer for the Unofficial SMR core.  WAV in, WAV out, controls as ADC counts.
+// smr_render: offline renderer for the Spectral Harmonic Rotator core.  WAV in, WAV out, controls as ADC counts.
 // Uses src/host (resampler and block adapter) and src/core. No plugin code. Output is a 32-bit float stereo WAV
 // at the input's sample rate. Run "smr_render --help" for the options.
 #include <algorithm>
@@ -17,7 +17,7 @@ namespace
     const char* kHelp =
         "smr_render IN.wav OUT.wav [options]\n"
         "\n"
-        "Plays IN.wav through the Unofficial SMR core (firmware v5.1.1, commit 79bc953, no enhancements) and writes OUT.wav\n"
+        "Plays IN.wav through the Spectral Harmonic Rotator core (firmware v5.1.1, commit 79bc953, no enhancements) and writes OUT.wav\n"
         "(32-bit float, stereo, same sample rate as IN.wav). Mono input feeds both input slots; stereo input feeds left to the\n"
         "first slot and right to the second. Output left is the first output slot (filtered_buffer, channels 2/4/6) and output\n"
         "right is the second (filtered_bufferR, channels 1/3/5): the source mapping, provisional (open question M1-m).\n"

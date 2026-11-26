@@ -356,11 +356,11 @@ private:
         // Header: the title between two ornament lines.
         {
             const auto tf = titleFont();
-            const float w = widthOf ("UNOFFICIAL SMR", tf);
-            logFit ("UNOFFICIAL SMR", w, titleRight - titleLeft);
+            const float w = widthOf (titleText, tf);
+            logFit (titleText, w, titleRight - titleLeft);
             g.setColour (goldText());
             g.setFont (tf);
-            g.drawText ("UNOFFICIAL SMR", juce::Rectangle<float> (500.0f - 350.0f, titleBaseline - tf.getAscent(), 700.0f, tf.getHeight()),
+            g.drawText (titleText, juce::Rectangle<float> (500.0f - 350.0f, titleBaseline - tf.getAscent(), 700.0f, tf.getHeight()),
                         juce::Justification::centred, false);
             g.setColour (gold());
             g.fillRect (160.0f, 28.6f, ornamentLeftEnd - 160.0f, 0.8f);

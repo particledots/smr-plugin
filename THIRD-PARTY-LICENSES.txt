@@ -1,7 +1,7 @@
-Unofficial SMR - third-party licences
+Spectral Harmonic Rotator - third-party licences
 =====================================
 
-Unofficial SMR is a community plugin. It is not an official product and is not
+Spectral Harmonic Rotator (formerly "Unofficial SMR") is a community plugin. It is not an official product and is not
 endorsed by the original designer or manufacturer of the Spectral Multiband
 Resonator.
 
@@ -57,10 +57,10 @@ JUCE bundles further components (for example the VST3 SDK and the Audio Unit
 SDK) under their own licences, listed in JUCE's LICENSE.md.
 
 
-3. Unofficial SMR itself
+3. Spectral Harmonic Rotator itself
 ------------------------
 
-Unofficial SMR as a whole is licensed under the GNU Affero General Public Licence
+Spectral Harmonic Rotator as a whole is licensed under the GNU Affero General Public Licence
 version 3, copyright (c) 2026 particledots. The full text is in the file LICENSE
 (shipped as LICENSE-AGPL-3.0.txt next to this file). The complete source of every
 build is at https://github.com/particledots/smr-plugin . The MIT-licensed firmware

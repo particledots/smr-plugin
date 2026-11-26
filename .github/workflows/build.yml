@@ -233,13 +233,13 @@ jobs:
             [ "$minos" = "12.0" ] || { echo "::error::smr_render slice $a minos is '$minos', expected 12.0"; exit 1; }
           done
           echo "::notice::INSPECT smr_render archs=$archs"
-          (cd dist && ditto -c -k --keepParent smr-render ../Unofficial-SMR-renderer.zip)
-          ls -la Unofficial-SMR-renderer.zip
+          (cd dist && ditto -c -k --keepParent smr-render ../Spectral-Harmonic-Rotator-renderer.zip)
+          ls -la Spectral-Harmonic-Rotator-renderer.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Unofficial-SMR-renderer-macOS
-          path: Unofficial-SMR-renderer.zip
+          name: Spectral-Harmonic-Rotator-renderer-macOS
+          path: Spectral-Harmonic-Rotator-renderer.zip
 
   build-macos:
     permissions:
@@ -375,20 +375,20 @@ jobs:
 
       - name: Package
         run: |
-          mkdir -p dist/Unofficial-SMR
-          cp -R build/SMR_artefacts/Release/AU/*.component dist/Unofficial-SMR/
-          cp -R build/SMR_artefacts/Release/VST3/*.vst3 dist/Unofficial-SMR/
-          cp THIRD-PARTY-LICENSES.txt dist/Unofficial-SMR/
-          cp LICENSE dist/Unofficial-SMR/LICENSE-AGPL-3.0.txt
-          cp docs/INSTALL.txt dist/Unofficial-SMR/
-          cp tools/install/Install-Unofficial-SMR.command dist/Unofficial-SMR/
-          chmod +x dist/Unofficial-SMR/Install-Unofficial-SMR.command
-          cp -R licenses dist/Unofficial-SMR/
-          ls -la dist/Unofficial-SMR
-          for f in LICENSE-AGPL-3.0.txt THIRD-PARTY-LICENSES.txt INSTALL.txt Install-Unofficial-SMR.command licenses/SMR-LICENSE.txt; do
-            [ -f "dist/Unofficial-SMR/$f" ] || { echo "::error::PACKAGE missing $f"; exit 1; }
+          mkdir -p dist/Spectral-Harmonic-Rotator
+          cp -R build/SMR_artefacts/Release/AU/*.component dist/Spectral-Harmonic-Rotator/
+          cp -R build/SMR_artefacts/Release/VST3/*.vst3 dist/Spectral-Harmonic-Rotator/
+          cp THIRD-PARTY-LICENSES.txt dist/Spectral-Harmonic-Rotator/
+          cp LICENSE dist/Spectral-Harmonic-Rotator/LICENSE-AGPL-3.0.txt
+          cp docs/INSTALL.txt dist/Spectral-Harmonic-Rotator/
+          cp tools/install/Install-Spectral-Harmonic-Rotator.command dist/Spectral-Harmonic-Rotator/
+          chmod +x dist/Spectral-Harmonic-Rotator/Install-Spectral-Harmonic-Rotator.command
+          cp -R licenses dist/Spectral-Harmonic-Rotator/
+          ls -la dist/Spectral-Harmonic-Rotator
+          for f in LICENSE-AGPL-3.0.txt THIRD-PARTY-LICENSES.txt INSTALL.txt Install-Spectral-Harmonic-Rotator.command licenses/SMR-LICENSE.txt; do
+            [ -f "dist/Spectral-Harmonic-Rotator/$f" ] || { echo "::error::PACKAGE missing $f"; exit 1; }
           done
-          echo "::notice::PACKAGE contents: $(ls dist/Unofficial-SMR | tr '\n' ' ')"
+          echo "::notice::PACKAGE contents: $(ls dist/Spectral-Harmonic-Rotator | tr '\n' ' ')"
 
       - name: Inspect the build (architectures, minimum macOS, AU identity)
         run: |
@@ -397,7 +397,7 @@ jobs:
             echo "### Build inspection"
             echo "Submodule pinned commit: \`$SMR_PINNED_COMMIT\` (checked above)"
           } >> "$GITHUB_STEP_SUMMARY"
-          for b in dist/Unofficial-SMR/*.component dist/Unofficial-SMR/*.vst3; do
+          for b in dist/Spectral-Harmonic-Rotator/*.component dist/Spectral-Harmonic-Rotator/*.vst3; do
             bin=$(ls "$b"/Contents/MacOS/* | head -1)
             archs=$(lipo -archs "$bin")
             echo "== $b"; echo "archs: $archs"
@@ -413,14 +413,36 @@ jobs:
             echo "- \`$(basename "$b")\`: archs \`$archs\`" >> "$GITHUB_STEP_SUMMARY"
           done
           echo "== AU Info.plist"
-          plutil -p dist/Unofficial-SMR/*.component/Contents/Info.plist | grep -E -A12 "AudioComponents|CFBundleIdentifier|CFBundleName|LSMinimumSystemVersion"
+          plutil -p dist/Spectral-Harmonic-Rotator/*.component/Contents/Info.plist | grep -E -A12 "AudioComponents|CFBundleIdentifier|CFBundleName|LSMinimumSystemVersion"
+          # Rename check: the new name shows, the identity that old projects depend on does not change.
+          au="dist/Spectral-Harmonic-Rotator/Spectral Harmonic Rotator.component"
+          vst="dist/Spectral-Harmonic-Rotator/Spectral Harmonic Rotator.vst3"
+          [ -d "$au" ] || { echo "::error::RENAME no '$au'"; fail=1; }
+          [ -d "$vst" ] || { echo "::error::RENAME no '$vst'"; fail=1; }
+          pl="$au/Contents/Info.plist"
+          auname=$(/usr/libexec/PlistBuddy -c "Print :AudioComponents:0:name" "$pl" 2>&1 || true)
+          sub=$(/usr/libexec/PlistBuddy -c "Print :AudioComponents:0:subtype" "$pl" 2>&1 || true)
+          man=$(/usr/libexec/PlistBuddy -c "Print :AudioComponents:0:manufacturer" "$pl" 2>&1 || true)
+          typ=$(/usr/libexec/PlistBuddy -c "Print :AudioComponents:0:type" "$pl" 2>&1 || true)
+          bid=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$pl" 2>&1 || true)
+          [ "$auname" = "particledots: Spectral Harmonic Rotator" ] || { echo "::error::RENAME AU name is '$auname'"; fail=1; }
+          [ "$typ/$sub/$man" = "aufx/Smru/Ptdt" ] || { echo "::error::RENAME AU codes are '$typ/$sub/$man', expected aufx/Smru/Ptdt"; fail=1; }
+          [ "$bid" = "com.particledots.SMR" ] || { echo "::error::RENAME bundle ID is '$bid', expected com.particledots.SMR"; fail=1; }
+          mi="$vst/Contents/Resources/moduleinfo.json"
+          cid=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(" ".join(c["CID"].replace("-","").upper()+"|"+c["Name"] for c in d["Classes"]))' "$mi" 2>&1 || true)
+          echo "VST3 classes: $cid"
+          case "$cid" in *"ABCDEF019182FAEB50746474536D7275|Spectral Harmonic Rotator"*) ;; *) echo "::error::RENAME VST3 component class is not ABCDEF019182FAEB50746474536D7275 named Spectral Harmonic Rotator: $cid"; fail=1;; esac
+          if grep -rIl "Unofficial SMR" dist/Spectral-Harmonic-Rotator --exclude=INSTALL.txt --exclude=THIRD-PARTY-LICENSES.txt --exclude="*.command" | grep -q .; then
+            echo "::error::RENAME old name still in: $(grep -rIl 'Unofficial SMR' dist/Spectral-Harmonic-Rotator --exclude=INSTALL.txt --exclude=THIRD-PARTY-LICENSES.txt --exclude='*.command' | tr '\n' ' ')"; fail=1
+          fi
+          echo "::notice::RENAME AU name='$auname' codes=$typ/$sub/$man bundle=$bid; VST3 $cid"
           exit $fail
 
       - name: auval (hard gate - a non-zero exit fails the build)
         timeout-minutes: 5
         run: |
           mkdir -p ~/Library/Audio/Plug-Ins/Components
-          cp -R dist/Unofficial-SMR/*.component ~/Library/Audio/Plug-Ins/Components/
+          cp -R dist/Spectral-Harmonic-Rotator/*.component ~/Library/Audio/Plug-Ins/Components/
           killall -9 AudioComponentRegistrar 2>/dev/null || true
           sleep 3
           auval -a | grep -i -E "Ptdt|SMR" || echo "not listed by auval -a"
@@ -440,11 +462,11 @@ jobs:
       - name: Zip for download
         run: |
           cd dist
-          ditto -c -k --keepParent Unofficial-SMR ../Unofficial-SMR.zip
+          ditto -c -k --keepParent Spectral-Harmonic-Rotator ../Spectral-Harmonic-Rotator.zip
           cd ..
-          ls -la Unofficial-SMR.zip
+          ls -la Spectral-Harmonic-Rotator.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Unofficial-SMR-macOS
-          path: Unofficial-SMR.zip
+          name: Spectral-Harmonic-Rotator-macOS
+          path: Spectral-Harmonic-Rotator.zip

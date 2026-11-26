@@ -6,7 +6,7 @@ if(APPLE)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "")
 endif()
 
-project(UnofficialSMR VERSION 0.0.4 LANGUAGES C CXX)
+project(SpectralHarmonicRotator VERSION 0.0.5 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -121,7 +121,7 @@ juce_add_plugin(SMR
   PLUGIN_MANUFACTURER_CODE Ptdt
   PLUGIN_CODE Smru
   FORMATS AU VST3
-  PRODUCT_NAME "Unofficial SMR"
+  PRODUCT_NAME "Spectral Harmonic Rotator"
   IS_SYNTH FALSE
   NEEDS_MIDI_INPUT FALSE
   NEEDS_MIDI_OUTPUT FALSE
@@ -155,7 +155,7 @@ target_include_directories(smr_plugin_tests PRIVATE src/plugin tools/smr_render)
 target_compile_definitions(smr_plugin_tests PRIVATE
   JUCE_WEB_BROWSER=0
   JUCE_USE_CURL=0
-  JucePlugin_Name="Unofficial SMR")
+  JucePlugin_Name="Spectral Harmonic Rotator")
 target_link_libraries(smr_plugin_tests PRIVATE
   SmrFonts
   smr_params

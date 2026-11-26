@@ -1358,6 +1358,13 @@ namespace
         check (tw > 60.0f && tw <= smrui::titleRight - smrui::titleLeft, "panel: the title fits its area (measured with its font)",
                fmt ("%.1f of %.0f canvas units", tw, (double) (smrui::titleRight - smrui::titleLeft)));
 
+        // The rename: the window title and the plugin's name are the new ones (the codes and saved state are checked elsewhere).
+        check (juce::String (smrui::titleText) == "SPECTRAL HARMONIC ROTATOR", "panel: the title text is the new name", smrui::titleText);
+        {
+            PanelSetup named (false);
+            check (named.proc->getName() == "Spectral Harmonic Rotator", "panel: the plugin's name is the new name", named.proc->getName().toStdString());
+        }
+
         // Five window sizes: the size is right, the window draws, and the title is inside its area in the drawn pixels.
         for (int w : widths)
         {

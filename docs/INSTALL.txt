@@ -1,7 +1,7 @@
-Unofficial SMR - install (test build)
+Spectral Harmonic Rotator - install (test build)
 
-EASIEST (AU only, what Logic uses): unzip both zips in Finder (double-click each), open the Unofficial-SMR folder and
-double-click Install-Unofficial-SMR.command. It installs into /Library/Audio/Plug-Ins/Components and asks for your Mac password. If macOS refuses to open it, right-click it, Open, Open. (Used successfully on the Intel Mac; not yet tested on the M4 mac mini. The Terminal steps below install into ~/Library, not /Library.)
+EASIEST (AU only, what Logic uses): unzip both zips in Finder (double-click each), open the Spectral-Harmonic-Rotator folder and
+double-click Install-Spectral-Harmonic-Rotator.command. It installs into /Library/Audio/Plug-Ins/Components, removes any copy under the old name "Unofficial SMR", and asks for your Mac password. If macOS refuses to open it, right-click it, Open, Open. (Used successfully on the Intel Mac; not yet tested on the M4 mac mini. The Terminal steps below install into ~/Library, not /Library.)
 The Terminal steps below do the same and also install the VST3.
 
 This is an early test build. It is not an official product.
@@ -13,18 +13,21 @@ block below, then press Return.
 
    cd ~/Downloads
    rm -rf smr-unpack && mkdir smr-unpack
-   ditto -x -k Unofficial-SMR-macOS.zip smr-unpack
-   ditto -x -k smr-unpack/Unofficial-SMR.zip smr-unpack
+   ditto -x -k Spectral-Harmonic-Rotator-macOS.zip smr-unpack
+   ditto -x -k smr-unpack/Spectral-Harmonic-Rotator.zip smr-unpack
 
 2. Clear the "downloaded from the internet" block:
 
    xattr -dr com.apple.quarantine ~/Downloads/smr-unpack
 
-3. Copy the plugins in:
+3. Remove any copy under the plugin's old name, "Unofficial SMR" (it has the same codes and
+   would clash), then copy the plugins in:
 
+   rm -rf ~/Library/Audio/Plug-Ins/Components/"Unofficial SMR.component" ~/Library/Audio/Plug-Ins/VST3/"Unofficial SMR.vst3"
+   sudo rm -rf /Library/Audio/Plug-Ins/Components/"Unofficial SMR.component"
    mkdir -p ~/Library/Audio/Plug-Ins/Components ~/Library/Audio/Plug-Ins/VST3
-   cp -R ~/Downloads/smr-unpack/Unofficial-SMR/*.component ~/Library/Audio/Plug-Ins/Components/
-   cp -R ~/Downloads/smr-unpack/Unofficial-SMR/*.vst3 ~/Library/Audio/Plug-Ins/VST3/
+   cp -R ~/Downloads/smr-unpack/Spectral-Harmonic-Rotator/*.component ~/Library/Audio/Plug-Ins/Components/
+   cp -R ~/Downloads/smr-unpack/Spectral-Harmonic-Rotator/*.vst3 ~/Library/Audio/Plug-Ins/VST3/
 
 4. Make macOS notice the new plugin:
 
@@ -33,8 +36,8 @@ block below, then press Return.
    (If it prints "No matching processes", that is fine.)
 
 5. In Logic, open the Plug-in Manager and rescan. The plugin is listed under
-   manufacturer "particledots" as "Unofficial SMR".
+   manufacturer "particledots" as "Spectral Harmonic Rotator".
 
 To remove it later:
 
-   rm -rf ~/Library/Audio/Plug-Ins/Components/"Unofficial SMR.component" ~/Library/Audio/Plug-Ins/VST3/"Unofficial SMR.vst3"
+   rm -rf ~/Library/Audio/Plug-Ins/Components/"Spectral Harmonic Rotator.component" ~/Library/Audio/Plug-Ins/VST3/"Spectral Harmonic Rotator.vst3"

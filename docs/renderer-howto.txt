@@ -1,4 +1,4 @@
-Unofficial SMR - offline renderer (Milestone 2)
+Spectral Harmonic Rotator - offline renderer (Milestone 2)
 ================================================
 
 smr_render plays a WAV file through the ported SMR core (firmware v5.1.1, commit 79bc953, no enhancements)

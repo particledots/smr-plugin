@@ -37,7 +37,10 @@ namespace smrui
 
     // The title is centred at x = 500 and must stay between these two x positions at every window size (inside the two gold
     // ornament lines; checked in the drawn pixels by the panel checks).
-    inline constexpr float titleLeft = 330.0f, titleRight = 670.0f, titleSize = 28.0f, titleBaseline = 38.0f, titleSpacing = 6.5f;
+    inline constexpr float titleLeft = 330.0f, titleRight = 670.0f, titleSize = 15.0f, titleBaseline = 34.0f, titleSpacing = 3.5f;
+    // The title text. 15 pt (was 28 pt for "UNOFFICIAL SMR"): at 28 pt this name would need about 595 of the 340 units.
+    // Baseline 34 keeps the capitals centred on the ornament lines (y 28.6).
+    inline constexpr const char* titleText = "SPECTRAL HARMONIC ROTATOR";
     inline constexpr float ornamentLeftEnd = 318.0f, ornamentRightStart = 682.0f;
 
     inline constexpr int stripX[6] = { 280, 380, 480, 580, 680, 780 };       // the six channels
@@ -86,7 +89,7 @@ namespace smrui
         return ga.getBoundingBox (0, -1, true).getWidth();
     }
     inline float textWidth (const juce::String& s, float size, float spacing = 0.0f) { return widthOf (s, font (size, false, spacing)); }
-    inline float titleWidth() { return widthOf ("UNOFFICIAL SMR", titleFont()); }
+    inline float titleWidth() { return widthOf (titleText, titleFont()); }
 
     // The sizes used for the window's text (canvas units).
     inline constexpr float labelSize = 12.0f, labelSpacing = 1.4f;       // switch labels, buttons
