@@ -1462,11 +1462,18 @@ namespace
                     };
                     auto& backdrop = ed->getBackdrop();
                     backdrop.setBufferedToImage (false);
-                    timeIt (false, 3);
-                    const double whole = timeIt (false, 20);
-                    backdrop.setBufferedToImage (true);
-                    timeIt (true, 3);
-                    const double tick = timeIt (true, 60);
+                    // A shared runner is noisy, so each cost is the best of several short rounds, taken one after the other
+                    // (the least disturbed round says what the drawing itself costs).
+                    double whole = 1.0e9, tick = 1.0e9;
+                    for (int round = 0; round < 9; ++round)
+                    {
+                        backdrop.setBufferedToImage (false);
+                        timeIt (false, 2);
+                        whole = std::min (whole, timeIt (false, 6));
+                        backdrop.setBufferedToImage (true);
+                        timeIt (true, 2);
+                        tick = std::min (tick, timeIt (true, 12));
+                    }
                     info (fmt ("panel drawing at %.0f wide", (double) w), fmt ("live update %.2f ms, whole window every time %.2f ms", tick, whole));
                     check (tick < 0.6 * whole, fmt ("panel %.0f: the live update is much lighter than drawing the whole window", (double) w),
                            fmt ("%.2f ms against %.2f ms", tick, whole));
